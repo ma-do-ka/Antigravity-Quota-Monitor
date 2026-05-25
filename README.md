@@ -94,11 +94,3 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ```
-
----
-
-## ✉️ Support & Author Profile
-
-Developed and Maintained by **Madoka (US Stock Journal Editorial Director)**.
-
-*   **note**: [US Stock Journal note Profile](https://note.com/us_kabu_journal)
