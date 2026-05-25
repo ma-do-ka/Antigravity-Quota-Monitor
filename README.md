@@ -8,6 +8,8 @@ A premium macOS menu bar utility (SwiftBar / xbar plugin) to monitor real-time A
 
 With an ultra-fast, zero-ui-interference local API collector, it helps you keep track of your active model quotas without interrupting your workspace flow.
 
+<img width="926" height="751" alt="image" src="https://github.com/user-attachments/assets/8462c7f6-e49d-4075-8a93-91192f793f40" />
+
 ---
 
 ## ✨ Features
