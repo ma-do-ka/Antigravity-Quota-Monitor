@@ -297,7 +297,7 @@ def save_quota_cache_data(cache_data):
 def get_quota_emoji(percentage):
     """パーセンテージに応じた色付き絵文字を返します。"""
     if percentage >= 100:
-        return "🟣"
+        return f"🟣{percentage}%"
     elif percentage >= 80:
         return f"🔵{percentage}%"
     elif percentage >= 60:
