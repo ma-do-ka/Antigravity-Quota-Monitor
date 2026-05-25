@@ -1,4 +1,5 @@
 # 👾 Antigravity Quota Monitor
+<img width="1983" height="793" alt="ChatGPT Image 2026年5月26日 08_50_09" src="https://github.com/user-attachments/assets/0d1e4e6a-6188-433f-9bef-b5f1937b7cff" />
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey.svg)](#)
@@ -8,7 +9,6 @@ A premium macOS menu bar utility (SwiftBar / xbar plugin) to monitor real-time A
 
 With an ultra-fast, zero-ui-interference local API collector, it helps you keep track of your active model quotas without interrupting your workspace flow.
 
-<img width="926" height="751" alt="image" src="https://github.com/user-attachments/assets/8462c7f6-e49d-4075-8a93-91192f793f40" />
 
 ---
 
@@ -20,6 +20,9 @@ With an ultra-fast, zero-ui-interference local API collector, it helps you keep 
 *   **⏱️ Smart UTC-to-Local Reset Times**: Detects the precise moment when your exhausted quota recovers and displays it translated to your local timezone.
 *   **🌐 In-Menu Translation (EN / JA)**: Toggle display languages between English and Japanese with a single click.
 *   **👾 Stealth & Pro Design**: Custom built-in interactive `About` section. The default debug menu items ("Run in Terminal", "Disable Plugin", standard About box) are hidden to keep the menu pristine. (Hold `Option (Alt)` while clicking to reveal them!).
+
+<img width="926" height="751" alt="image" src="https://github.com/user-attachments/assets/8462c7f6-e49d-4075-8a93-91192f793f40" />
+
 
 ---
 
