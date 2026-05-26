@@ -1,66 +1,57 @@
-# 👾 Antigravity Quota Monitor
-<img src="banner.png" alt="Antigravity Quota Monitor Banner" />
+# 👾 Antigravity Quota Monitor (AQM)
+
+![Antigravity Quota Monitor Banner](banner.png)
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey.svg)](#)
 [![SwiftBar](https://img.shields.io/badge/Compatible-SwiftBar%20%2F%20xbar-orange.svg)](#)
+[![Open VSX](https://img.shields.io/badge/Open%20VSX-Published-purple.svg)](https://open-vsx.org/extension/ma-do-ka/antigravity-quota)
 
-A premium macOS menu bar utility (SwiftBar / xbar plugin) to monitor real-time API quotas, reset times, and monthly credits for your LLMs under the Antigravity agent system.
+**Antigravity Quota Monitor (AQM)** is a premium macOS menu bar utility (SwiftBar / xbar plugin) designed to monitor real-time API quotas, reset times, and monthly credits for your LLMs (Flash, Pro, Sonnet, Opus, etc.) under the Antigravity agent system.
 
 With an ultra-fast, zero-ui-interference local API collector, it helps you keep track of your active model quotas without interrupting your workspace flow.
-
 
 ---
 
 ## ✨ Features
 
 *   **📊 Real-Time Multi-Model Status Board**: Monitor current remaining percentage quotas for Flash (Med/High/Low), Pro (Low/High), Sonnet 4.6, Opus 4.6, and GPT-OSS 120B in a beautiful menu bar ribbon.
-*   **🔌 Zero-Interference API Crawling**: Pure background fetching. No popup windows or browser session hijacking. It automatically hooks into your local Language Server daemon, locates the active LISTEN port, extracts the CSRF token, and fetches directly via the Connect protocol.
+*   **🔌 Zero-Interference API Crawling**: Pure background fetching. No popup windows or browser session hijacking. It automatically hooks into your local Language Server daemon over localhost and fetches directly via the Connect protocol.
 *   **💳 Monthly Credit Tracker**: Calculates your precise remaining Monthly Prompt Credits and Flow Credits, displaying them with status colors depending on usage (Green for safe, Yellow for warnings, Red for exhausted).
 *   **⏱️ Smart UTC-to-Local Reset Times**: Detects the precise moment when your exhausted quota recovers and displays it translated to your local timezone.
 *   **🌐 In-Menu Translation (EN / JA)**: Toggle display languages between English and Japanese with a single click.
 *   **👾 Stealth & Pro Design**: Custom built-in interactive `About` section. The default debug menu items ("Run in Terminal", "Disable Plugin", standard About box) are hidden to keep the menu pristine. (Hold `Option (Alt)` while clicking to reveal them!).
 
-<img src="menu_screenshot.png" alt="AQM Menu Screenshot" />
-
-
----
-
-## 🛠️ Requirements
-
-*   **macOS** (compatible with Apple Silicon and Intel)
-*   **Python 3.x**
-*   **Node.js** (Standard runtime, no external npm packages required)
-*   **SwiftBar** (Recommended) or **xbar** installed on macOS
+![AQM Menu Screenshot](menu_screenshot.png)
 
 ---
 
 ## 🚀 Installation & Setup
 
-### Step 1: Clone the Repository
-Clone this repository to your preferred local workspace (e.g., your Desktop or Projects folder):
-```bash
-git clone https://github.com/yourusername/AntigravityQuarterViewer.git
-cd AntigravityQuarterViewer
-```
+Installation is highly streamlined. Please follow the steps below.
 
-### Step 2: Establish the SwiftBar Symbolic Link
-SwiftBar executes plugins placed in its plugins directory. Create a symbolic link pointing to the executable Python coordinator in the `app` subdirectory:
+### 1. Install via VS Code Extension (Recommended)
 
-```bash
-# 1. Ensure the executable permission is set
-chmod +x app/antigravity_status.py
+The easiest way to get started is to install the bridge extension directly from your IDE's marketplace.
 
-# 2. Link the script to the SwiftBar plugins folder
-ln -sf "$(pwd)/app/antigravity_status.py" ~/Library/Application\ Support/SwiftBar/plugins/antigravity_status.py
-```
+1. Open the **Extensions Panel** in your VS Code compatible IDE (VS Code, Cursor, etc.).
+2. Search for **`AQM`** or `Antigravity Quota`.
+3. Install **Antigravity Quota Monitor** published by **ma-do-ka**.
 
-### Step 3: Refresh SwiftBar
-Open SwiftBar, or refresh all active plugins by running the following command:
-```bash
-open -g "swiftbar://refreshall"
-```
-The monitor will instantly appear in your menu bar.
+* 📦 *Open VSX: [ma-do-ka/antigravity-quota](https://open-vsx.org/extension/ma-do-ka/antigravity-quota)*
+* 💻 *GitHub: [ma-do-ka/Antigravity-Quota-Monitor](https://github.com/ma-do-ka/Antigravity-Quota-Monitor)*
+
+> [!NOTE]
+> **SwiftBar Integration**
+> Installing this IDE extension will automatically deploy the required SwiftBar plugin scripts to your macOS system in the background.  
+> *Note: The SwiftBar application itself is not bundled. If it is not installed on your system, the extension will display a prompt with a direct link to download it.*
+
+### 2. Prepare SwiftBar (macOS)
+
+To display the monitor in your menu bar, you need the native macOS application **SwiftBar**.
+
+1. Download and install the latest release from the [SwiftBar Official GitHub](https://github.com/swiftbar/SwiftBar) (or run `brew install swiftbar` if you use Homebrew).
+2. Launch the SwiftBar app. It will automatically detect the AQM plugin deployed by the IDE and display your quotas in the menu bar!
 
 ---
 
@@ -68,8 +59,8 @@ The monitor will instantly appear in your menu bar.
 
 This plugin is optimized for high-performance, low-overhead execution:
 
-*   **`app/antigravity_status.py`** (The Orchestrator): Parses local agent diagnostic logs, performs high-efficiency caching, manages localized menu renders, and acts as the SwiftBar entry point.
-*   **`app/get_quota.js`** (The Connect Crawler): An ultra-fast script executing Node.js native sockets. It identifies the target Language Server PID via `/bin/ps`, scans target sockets using `/usr/sbin/lsof` restricted strictly to that PID, and securely makes direct HTTP POST calls to the Connect server (`GetUserStatus` endpoint) in **under 0.04 seconds**.
+*   **`antigravity_status.py`** (The Orchestrator): Parses local agent diagnostic logs, performs high-efficiency caching, manages localized menu renders, and acts as the SwiftBar entry point.
+*   **`get_quota.js`** (The Connect Crawler): An ultra-fast script executing Node.js native sockets. It identifies the target Language Server PID via `/bin/ps`, scans target sockets restricted strictly to that PID, and securely makes direct HTTP POST calls to the Connect server in **under 0.04 seconds**.
 
 ---
 
@@ -83,19 +74,8 @@ This plugin is optimized for high-performance, low-overhead execution:
 ## 📄 License
 
 This project is licensed under the **Apache License 2.0**.
-
-```text
 Copyright 2026 Madoka (US Stock Journal Editorial Director)
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+---
 
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-```
+*🇯🇵 For Japanese Users: 詳細な使い方やセットアップガイドについては、[こちらの公式Note記事](https://note.com/us_kabu_journal/n/nb99ef3e525ce) をご覧ください。*

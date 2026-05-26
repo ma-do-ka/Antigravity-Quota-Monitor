@@ -11,8 +11,4 @@ tasks/**
 *.html
 *.ts
 *.webp
-*.png
-!icon.png
-!banner.png
-!menu_screenshot.png
 package-lock.json
