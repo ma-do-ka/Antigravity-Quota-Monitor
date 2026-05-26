@@ -71,6 +71,22 @@ This plugin is optimized for high-performance, low-overhead execution:
 
 ---
 
+## 🔄 Changelog
+
+### 💎 V1.3.2 (May 26, 2026)
+*   **Asset Refresh Integration**: Pushed all updated visual assets including `menu_screenshot.png` directly to the GitHub remote repository to solve registry-side relative path resolution and cache synchronization.
+
+### 💎 V1.3.1 (May 26, 2026)
+*   **Documentation Refinement**: Restored the main README content completely back to English as explicitly requested, ensuring standard global readability while preserving all features.
+
+### 💎 V1.3.0 (May 26, 2026)
+*   **Perfect Vertical Alignment**: Replaced standard list bullets with premium indentation and set dropdown monospace styling using `SFMono-Regular` alongside dynamic padding logic. Your model names now align perfectly like a pro.
+*   **Smart UTC-to-Local Reset Times**: Streamlined quota recovery times by removing the redundant "year" label, adding a custom `⟳` prefix, and dynamically toggling between "Today" and "Tomorrow" formats depending on local times.
+*   **Premium Cropped Neon Logo**: Restored the original high-tech dark metallic rounded rectangle background while cropping the glowing cyan neon quota circle and "AQM" typography right to the borders (margins-free) for a state-of-the-art tech icon.
+*   **Extension Asset Packaging**: Bundled `banner.png` and `menu_screenshot.png` directly inside the packaged VSIX extension to fully bypass strict Content Security Policy (CSP) blocking inside VS Code.
+
+---
+
 ## 📄 License
 
 This project is licensed under the **Apache License 2.0**.
