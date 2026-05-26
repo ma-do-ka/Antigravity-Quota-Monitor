@@ -309,6 +309,21 @@ def get_quota_emoji(percentage):
     else:
         return f"🔴{percentage}%"
 
+def get_quota_sphere_emoji(percentage):
+    """パーセンテージに応じた色付き球体絵文字単体を返します。"""
+    if percentage >= 100:
+        return "🟣"
+    elif percentage >= 80:
+        return "🔵"
+    elif percentage >= 60:
+        return "🟢"
+    elif percentage >= 40:
+        return "🟡"
+    elif percentage >= 20:
+        return "🟠"
+    else:
+        return "🔴"
+
 def get_quota_color(percentage):
     """パーセンテージに応じたプレミアムなカラー（Hexコード）を返します。"""
     if percentage >= 100:
@@ -327,7 +342,7 @@ def get_quota_color(percentage):
 def format_reset_time(iso_str, lang="en"):
     """UTCのISO 8601形式の文字列を、ローカル（日本時間）の分かりやすい表記に変換します。"""
     if not iso_str:
-        return ""
+        return "—"
     try:
         if iso_str.endswith('Z'):
             iso_str = iso_str[:-1] + '+00:00'
@@ -337,15 +352,13 @@ def format_reset_time(iso_str, lang="en"):
         dt_local = dt_utc.astimezone()
         now = datetime.datetime.now().astimezone()
         
-        label = MESSAGES[lang]["reset"]
-        
         # 今日中か明日以降かで表示フォーマットをスマートに判定
         if dt_local.date() == now.date():
-            return f"({label}: {dt_local.strftime('%H:%M')})"
+            return f"⟳ {dt_local.strftime('%H:%M')}"
         else:
-            return f"({label}: {dt_local.strftime('%m/%d %H:%M')})"
+            return f"⟳ {dt_local.strftime('%m/%d %H:%M')}"
     except Exception:
-        return ""
+        return "—"
 
 def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_data=None, resets_data=None, lang="en"):
     """SwiftBar / xbar 用の標準出力を生成します。"""
@@ -420,27 +433,32 @@ def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_dat
         cache_status = msg["cached"] if is_cached else msg["realtime"]
         print(f"{msg['model_header']}{cache_status} | font=sans-serif size=12 bold=true")
         full_names = {
-            "F-Med": "Gemini 3.5 Flash (Medium)",
+            "F-Med": "Gemini 3.5 Flash (Med)",
             "F-High": "Gemini 3.5 Flash (High)",
             "F-Low": "Gemini 3.5 Flash (Low)",
             "P-Low": "Gemini 3.1 Pro (Low)",
             "P-High": "Gemini 3.1 Pro (High)",
-            "Sonnet": "Claude Sonnet 4.6 (Thinking)",
-            "Opus": "Claude Opus 4.6 (Thinking)",
-            "GPT-120": "GPT-OSS 120B (Medium)"
+            "Sonnet": "Claude Sonnet 4.6",
+            "Opus": "Claude Opus 4.6",
+            "GPT-120": "GPT-OSS 120B"
         }
         for key, name in full_names.items():
             if key in quotas:
                 val = quotas[key]
-                emoji = get_quota_emoji(val)
+                sphere = get_quota_sphere_emoji(val)
                 color = get_quota_color(val)
                 
-                # クォータが100%未満かつリセット日時がある場合のみ、回復時間を表示
-                reset_text = ""
+                # 回復時間の表記
+                reset_text = "—"
                 if val < 100 and resets_data and key in resets_data:
-                    reset_text = " " + format_reset_time(resets_data[key], lang)
-                    
-                print(f"  {emoji} {name}: {val}%{reset_text} | font=monospace size=12 color={color}")
+                    reset_text = format_reset_time(resets_data[key], lang)
+                
+                # アライメント位置合わせのための等幅パディング
+                name_padded = name.ljust(26)
+                val_padded = f"{val}%".rjust(4)
+                reset_padded = reset_text.rjust(14)
+                
+                print(f"  {sphere} {name_padded} {val_padded}   {reset_padded} | font=SFMono-Regular size=12 color={color}")
         
     if credits_data:
         print("---")
