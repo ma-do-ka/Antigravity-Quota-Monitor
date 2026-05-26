@@ -73,6 +73,11 @@ This plugin is optimized for high-performance, low-overhead execution:
 
 ## 🔄 Changelog
 
+### 💎 V1.3.3 (May 27, 2026)
+*   **Marketplace Metadata Optimization**: Fully refined package categories and search keywords (tags) for enhanced discoverability.
+*   **Premium Visual Styling**: Implemented a dark theme gallery banner (`#0d1117`) for the Marketplace landing page, integrated direct sponsorship links via note, and clearly marked pricing as Free.
+*   **Strict macOS Target Declaration**: Integrated native VS Code OS constraints using `"os": ["darwin"]` to explicitly mark the extension as macOS-only, seamlessly preventing installation confusion for Windows/Linux developers.
+
 ### 💎 V1.3.2 (May 26, 2026)
 *   **Asset Refresh Integration**: Pushed all updated visual assets including `menu_screenshot.png` directly to the GitHub remote repository to solve registry-side relative path resolution and cache synchronization.
 
