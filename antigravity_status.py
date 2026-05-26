@@ -42,7 +42,7 @@ LOG_PATTERN = os.path.join(DAEMON_DIR, "ls_*.log")
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GET_QUOTA_JS = os.path.join(SCRIPT_DIR, "get_quota.js")
 QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/quota_cache.json")
-INDENT = "\u2002\u2002"  # macOS SwiftBar で確実に機能する等幅スペース (En Space) による美しいインデント
+INDENT = "  ▸ "  # B案：macOS SwiftBar で確実に字下げされ、テック系に映えるミニマル右矢印記号
 
 # ユーザーの「Model Quota」ダッシュボード画面から読み取ったデフォルト初期クォータ値
 DEFAULT_QUOTAS = {
