@@ -42,6 +42,7 @@ LOG_PATTERN = os.path.join(DAEMON_DIR, "ls_*.log")
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GET_QUOTA_JS = os.path.join(SCRIPT_DIR, "get_quota.js")
 QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/quota_cache.json")
+INDENT = "\u2002\u2002"  # macOS SwiftBar で確実に機能する等幅スペース (En Space) による美しいインデント
 
 # ユーザーの「Model Quota」ダッシュボード画面から読み取ったデフォルト初期クォータ値
 DEFAULT_QUOTAS = {
@@ -79,9 +80,9 @@ MESSAGES = {
         "refresh": "🔄 Refresh",
         "lang_header": "🌐 Language",
         "about_header": "ℹ️ About",
-        "about_version": "    Antigravity Quota Monitor: v1.2",
-        "about_website": "    Website: https://note.com/us_kabu_journal/n/nb99ef3e525ce",
-        "about_copyright": "    Copyright © 2026 US stock journal. All rights reserved."
+        "about_version": "Antigravity Quota Monitor: v1.2",
+        "about_website": "Website: https://note.com/us_kabu_journal/n/nb99ef3e525ce",
+        "about_copyright": "Copyright © 2026 US stock journal. All rights reserved."
     },
     "ja": {
         "title_stopped": "停止中",
@@ -106,9 +107,9 @@ MESSAGES = {
         "refresh": "🔄 再読み込み",
         "lang_header": "🌐 言語設定 (Language)",
         "about_header": "ℹ️ About",
-        "about_version": "    Antigravity Quota Monitor: v1.2",
-        "about_website": "    Website: https://note.com/us_kabu_journal/n/nb99ef3e525ce",
-        "about_copyright": "    Copyright © 2026 US stock journal. All rights reserved."
+        "about_version": "Antigravity Quota Monitor: v1.2",
+        "about_website": "Website: https://note.com/us_kabu_journal/n/nb99ef3e525ce",
+        "about_copyright": "Copyright © 2026 US stock journal. All rights reserved."
     }
 }
 
@@ -471,7 +472,7 @@ def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_dat
             remaining_p = max(0, month_p - avail_p)
             pct = (remaining_p / month_p) * 100 if month_p > 0 else 0
             color = "#34c759" if pct >= 80 else ("#ffcc00" if pct >= 30 else "#ff3b30")
-            print(f"    {msg['prompt_limit']}: {remaining_p:,} / {month_p:,} ({pct:.1f}%) | font=monospace size=12 color={color}")
+            print(f"{INDENT}{msg['prompt_limit']}: {remaining_p:,} / {month_p:,} ({pct:.1f}%) | font=monospace size=12 color={color}")
         
         # フロークレジット
         avail_f = credits_data.get("availableFlow")
@@ -480,12 +481,12 @@ def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_dat
             remaining_f = max(0, month_f - avail_f)
             pct = (remaining_f / month_f) * 100 if month_f > 0 else 0
             color = "#34c759" if pct >= 80 else ("#ffcc00" if pct >= 30 else "#ff3b30")
-            print(f"    {msg['flow_credit']}: {remaining_f:,} / {month_f:,} ({pct:.1f}%) | font=monospace size=12 color={color}")
+            print(f"{INDENT}{msg['flow_credit']}: {remaining_f:,} / {month_f:,} ({pct:.1f}%) | font=monospace size=12 color={color}")
             
         # Google One AI
         g1_cred = credits_data.get("googleOneAi")
         if g1_cred is not None:
-            print(f"    {msg['google_one']}: {g1_cred} | font=monospace size=12 color=#34c759")
+            print(f"{INDENT}{msg['google_one']}: {g1_cred} | font=monospace size=12 color=#34c759")
             
     # 3. 言語選択UI
     print("---")
@@ -493,15 +494,15 @@ def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_dat
     print(f"{msg['lang_header']} | font=sans-serif size=12 bold=true")
     check_en = " [✓]" if lang == "en" else ""
     check_ja = " [✓]" if lang == "ja" else ""
-    print(f"    🇺🇸 English{check_en} | terminal=false refresh=true bash=\"/usr/bin/python3\" param1=\"{script_path}\" param2=\"--set-lang\" param3=\"en\"")
-    print(f"    🇯🇵 日本語{check_ja} | terminal=false refresh=true bash=\"/usr/bin/python3\" param1=\"{script_path}\" param2=\"--set-lang\" param3=\"ja\"")
+    print(f"{INDENT}🇺🇸 English{check_en} | terminal=false refresh=true bash=\"/usr/bin/python3\" param1=\"{script_path}\" param2=\"--set-lang\" param3=\"en\"")
+    print(f"{INDENT}🇯🇵 日本語{check_ja} | terminal=false refresh=true bash=\"/usr/bin/python3\" param1=\"{script_path}\" param2=\"--set-lang\" param3=\"ja\"")
     
     # 4. 独自 About セクション
     print("---")
     print(f"{msg['about_header']} | font=sans-serif size=12 bold=true")
-    print(f"{msg['about_version']} | font=monospace size=11 color=#8e8e93")
-    print(f"{msg['about_website']} | font=monospace size=11 href=https://note.com/us_kabu_journal/n/nb99ef3e525ce color=#007aff")
-    print(f"{msg['about_copyright']} | font=monospace size=11 color=#8e8e93")
+    print(f"{INDENT}{msg['about_version']} | font=monospace size=11 color=#8e8e93")
+    print(f"{INDENT}{msg['about_website']} | font=monospace size=11 href=https://note.com/us_kabu_journal/n/nb99ef3e525ce color=#007aff")
+    print(f"{INDENT}{msg['about_copyright']} | font=monospace size=11 color=#8e8e93")
 
     # 5. 再読み込みボタン
     print("---")
