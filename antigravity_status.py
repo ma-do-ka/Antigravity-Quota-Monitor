@@ -80,7 +80,7 @@ MESSAGES = {
         "lang_header": "🌐 Language",
         "about_header": "ℹ️ About",
         "about_version": "  ・Antigravity Quota Monitor: v1.2",
-        "about_website": "  ・Website: https://note.com/us_kabu_journal",
+        "about_website": "  ・Website: https://note.com/us_kabu_journal/n/nb99ef3e525ce",
         "about_copyright": "  ・Copyright © 2026 US stock journal. All rights reserved."
     },
     "ja": {
@@ -107,7 +107,7 @@ MESSAGES = {
         "lang_header": "🌐 言語設定 (Language)",
         "about_header": "ℹ️ About",
         "about_version": "  ・Antigravity Quota Monitor: v1.2",
-        "about_website": "  ・Website: https://note.com/us_kabu_journal",
+        "about_website": "  ・Website: https://note.com/us_kabu_journal/n/nb99ef3e525ce",
         "about_copyright": "  ・Copyright © 2026 US stock journal. All rights reserved."
     }
 }
@@ -482,7 +482,7 @@ def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_dat
     print("---")
     print(f"{msg['about_header']} | font=sans-serif size=12 bold=true")
     print(f"{msg['about_version']} | font=monospace size=11 color=#8e8e93")
-    print(f"{msg['about_website']} | font=monospace size=11 href=https://note.com/us_kabu_journal color=#007aff")
+    print(f"{msg['about_website']} | font=monospace size=11 href=https://note.com/us_kabu_journal/n/nb99ef3e525ce color=#007aff")
     print(f"{msg['about_copyright']} | font=monospace size=11 color=#8e8e93")
 
     # 5. 再読み込みボタン
