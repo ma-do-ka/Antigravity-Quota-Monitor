@@ -73,6 +73,10 @@ This plugin is optimized for high-performance, low-overhead execution:
 
 ## 🔄 Changelog
 
+### 💎 V1.3.4 (May 27, 2026)
+*   **OS Support Specification**: Removed the redundant `"os"` package.json field which is ignored by the VS Code extension marketplace.
+*   **Graceful Platform Warning**: Implemented a native VS Code warning prompt during extension activation to gracefully notify Windows/Linux developers that AQM requires macOS and SwiftBar, eliminating silent activation failures.
+
 ### 💎 V1.3.3 (May 27, 2026)
 *   **Marketplace Metadata Optimization**: Fully refined package categories and search keywords (tags) for enhanced discoverability.
 *   **Premium Visual Styling**: Implemented a dark theme gallery banner (`#0d1117`) for the Marketplace landing page, integrated direct sponsorship links via note, and clearly marked pricing as Free.

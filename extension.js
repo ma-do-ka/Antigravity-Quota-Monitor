@@ -9,6 +9,7 @@ function activate(context) {
 
     // 1. macOS環境であるかチェック
     if (os.platform() !== 'darwin') {
+        vscode.window.showWarningMessage('Antigravity Quota Monitor (AQM) is currently only supported on macOS (requires SwiftBar).');
         return;
     }
 
