@@ -1,0 +1,32 @@
+{
+  "name": "antigravity-quota",
+  "displayName": "Antigravity Quota Monitor (AQM)",
+  "icon": "icon.png",
+  "description": "macOS Menu Bar Quota Monitor integration with SwiftBar for Antigravity (Gemini)",
+  "version": "1.0.4",
+  "publisher": "ma-do-ka",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ma-do-ka/Antigravity-Quota-Monitor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ma-do-ka/Antigravity-Quota-Monitor/issues"
+  },
+  "homepage": "https://github.com/ma-do-ka/Antigravity-Quota-Monitor#readme",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.1",
+    "ovsx": "^0.10.12"
+  }
+}
