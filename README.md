@@ -22,7 +22,7 @@ With an ultra-fast, zero-ui-interference local API collector, it helps you keep 
 *   **🌐 In-Menu Translation (EN / JA)**: Toggle display languages between English and Japanese with a single click.
 *   **👾 Stealth & Pro Design**: Custom built-in interactive `About` section. The default debug menu items ("Run in Terminal", "Disable Plugin", standard About box) are hidden to keep the menu pristine. (Hold `Option (Alt)` while clicking to reveal them!).
 
-![AQM Menu Screenshot](menu_screenshot.png)
+![AQM Menu Screenshot](menu_screenshot.png?v=1.3.2)
 
 ---
 
