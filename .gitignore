@@ -1,0 +1,16 @@
+# =========================================================================
+# White-list Gitignore for Antigravity Quota Monitor
+# Only the specified 4 deployment files are allowed to be tracked by Git.
+# All other development scripts, tests, and caches are strictly ignored.
+# =========================================================================
+
+# Ignore everything by default
+*
+.*/
+
+# Except for the following official release files (Whitelist)
+!.gitignore
+!LICENSE
+!README.md
+!antigravity_status.py
+!get_quota.js
