@@ -458,7 +458,7 @@ def print_swiftbar_format(status, log_file, quotas, is_cached=False, credits_dat
                 val_padded = f"{val}%".rjust(4)
                 reset_padded = reset_text.rjust(14)
                 
-                print(f"  {sphere} {name_padded} {val_padded}   {reset_padded} | font=SFMono-Regular size=12 color={color}")
+                print(f"  {sphere} {name_padded} {val_padded}   {reset_padded} | font=Menlo size=12 color={color}")
         
     if credits_data:
         print("---")
