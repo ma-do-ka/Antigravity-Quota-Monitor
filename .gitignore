@@ -20,3 +20,9 @@
 !icon.png
 !banner.png
 !menu_screenshot.png
+
+# Allow GitHub Actions workflow
+!.github/
+!.github/workflows/
+!.github/workflows/release.yml
+
