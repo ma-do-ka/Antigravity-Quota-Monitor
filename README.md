@@ -112,7 +112,7 @@ This plugin is optimized for high-performance, low-overhead execution with a **P
 
 ## 📋 Changelog
 
-### v1.6.3 (Latest)
+### v1.7.0 (Latest)
 - 🐛 **Bulletproof Upgrade Safety**: Dynamic scan-and-clean of the SwiftBar plugin directory on every activation. Old plugin files from any previous version are automatically detected and removed, preventing duplicate menu bar icons.
 - 🐛 **Pending State Fix**: Fixed a bug where the "Awaiting Input" icon persisted permanently even after the user had already responded.
 
@@ -241,7 +241,7 @@ If you find this project helpful, please consider giving it a ⭐ on [GitHub](ht
 
 ## 📋 更新履歴 (Changelog)
 
-### v1.6.3（最新）
+### v1.7.0（最新）
 - 🐛 **アップグレード時の完全安全化**: IDE起動時に SwiftBar プラグインディレクトリを動的スキャンし、過去バージョンのファイルを自動検出・完全削除。二重起動を根本的に防止。
 - 🐛 **承認待ちアイコン固着バグの修正**: ユーザー回答後も「入力待ち」アイコンが永久に表示され続ける問題を修正。
 
