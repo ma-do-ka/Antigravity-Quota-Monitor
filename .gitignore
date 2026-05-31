@@ -26,3 +26,9 @@
 !.github/workflows/
 !.github/workflows/release.yml
 
+# Allow app/ directory and its packaged contents
+!app/
+!app/antigravity_status.py
+!app/get_quota.js
+
+
