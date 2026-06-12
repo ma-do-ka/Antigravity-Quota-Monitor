@@ -7,6 +7,9 @@ on:
     branches:
       - main       # 追加: main ブランチでも実行
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -45,7 +48,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git tag ${{ steps.tag.outputs.tag }}
-          git push origin ${{ steps.tag.outputs.tag }}
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git ${{ steps.tag.outputs.tag }}
 
       - name: Create GitHub Release and Upload VSIX
         uses: softprops/action-gh-release@v2
