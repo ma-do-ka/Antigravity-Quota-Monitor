@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #<swiftbar.title>Antigravity Quota Monitor</swiftbar.title>
-#<swiftbar.version>2.0.0</swiftbar.version>
+#<swiftbar.version>2.0.1</swiftbar.version>
 #<swiftbar.author>Madoka</swiftbar.author>
 #<swiftbar.desc>Antigravity Quota & Credit Monitor (2-second refresh)</swiftbar.desc>
 #<swiftbar.icon>👾</swiftbar.icon>
@@ -66,7 +66,7 @@ QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/daemon/quota_cache.
 
 SPINNER_FRAMES = ["✨️🤔", "💫🤔", "⭐🤔", "🌟😃"]
 MOON_FRAMES = ["💬😑", "💬😐", "💬😊", "💬😃"]
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 INDENT = "\u00A0\u00A0"  # SwiftBarでトリムされないクリーンなインデント (Non-Breaking Space)
 
 # バージョンの動的取得 (package.jsonから自動連動)

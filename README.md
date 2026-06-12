@@ -107,6 +107,10 @@ The leftmost icon in the menu bar dynamically reflects your AI agent's real-time
 
 ## 📋 Changelog
 
+### v2.0.1
+- 🚀 **Automated Publishing via GitHub Actions**: Directly publish compiled packages to Open VSX Registry and VS Code Marketplace upon pushing to `main` (if secrets are set).
+- ⚙️ **Modernized CI Workflow**: Upgraded deprecated GitHub Actions syntax.
+
 ### v2.0.0
 - ✨ **10-Dot System Bar Gauge**: Clean, space-saving dot indicator array replacing verbose textual titles.
 - ✨ **Pillow Dynamic Ring Drawing**: Generates high-definition circular progress rings inside the dropdown.
@@ -218,6 +222,10 @@ graph TD
 ---
 
 ## 📋 更新履歴 (Changelog)
+
+### v2.0.1
+- 🚀 **GitHub Actions による自動パブリッシュ**: `main` ブランチへのプッシュ時に、VS Code Marketplace および Open VSX Registry へ自動かつ即座に拡張機能をパブリッシュする仕組みを追加（シークレット設定時）。
+- ⚙️ **CI ワークフローの近代化**: 非推奨となっていた GitHub Actions 構文（set-output 等）を最新の方式へアップデート。
 
 ### v2.0.0
 - ✨ **10ドット・システムバーゲージ**: 冗長なテキストを廃止し、省スペースで直感的なドット配列UIへ刷新。
