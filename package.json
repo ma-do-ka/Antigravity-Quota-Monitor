@@ -3,7 +3,7 @@
   "displayName": "Antigravity Quota Monitor (AQM)",
   "icon": "icon.png",
   "description": "macOS Menu Bar Quota Monitor integration with SwiftBar for Antigravity (Gemini)",
-  "version": "1.7.0",
+  "version": "2.0.0",
   "publisher": "ma-do-ka",
   "engines": {
     "vscode": "^1.60.0"
@@ -22,7 +22,6 @@
     "status-bar",
     "api"
   ],
-
   "galleryBanner": {
     "color": "#0d1117",
     "theme": "dark"

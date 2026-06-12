@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #<swiftbar.title>Antigravity Quota Monitor</swiftbar.title>
-#<swiftbar.version>1.7.0</swiftbar.version>
+#<swiftbar.version>2.0.0</swiftbar.version>
 #<swiftbar.author>Madoka</swiftbar.author>
 #<swiftbar.desc>Antigravity Quota & Credit Monitor (2-second refresh)</swiftbar.desc>
 #<swiftbar.icon>👾</swiftbar.icon>
@@ -45,6 +45,15 @@ import re
 import warnings
 import subprocess
 
+# Pillow (PIL) の動的画像生成用インポート試行
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    import io
+    import base64
+    HAS_PILLOW = True
+except ImportError:
+    HAS_PILLOW = False
+
 # 警告出力を抑制 (urllib3のNotOpenSSLWarningなどをSwiftBarに流さないため)
 warnings.filterwarnings("ignore")
 
@@ -57,7 +66,7 @@ QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/daemon/quota_cache.
 
 SPINNER_FRAMES = ["✨️🤔", "💫🤔", "⭐🤔", "🌟😃"]
 MOON_FRAMES = ["💬😑", "💬😐", "💬😊", "💬😃"]
-VERSION = "1.7.0"
+VERSION = "2.0.0"
 INDENT = "\u00A0\u00A0"  # SwiftBarでトリムされないクリーンなインデント (Non-Breaking Space)
 
 # バージョンの動的取得 (package.jsonから自動連動)
@@ -73,15 +82,10 @@ except Exception:
 
 # ユーザーの「Model Quota」ダッシュボード画面から読み取ったデフォルト初期クォータ値
 DEFAULT_QUOTAS = {
-    "F-Med": 100,
-    "F-High": 100,
-    "F-Low": 100,
-    "P-Low": 100,
-    "P-High": 100,
-    "Sonnet": 100,
-    "Opus": 100,
-    "GPT-120": 100
+    "Gemini": 100,
+    "Claude_GPT": 100
 }
+
 
 MESSAGES = {
     "en": {
@@ -272,9 +276,13 @@ def get_stateless_log_status(log_path=None):
                         if mtime > latest_t_mtime:
                             latest_t_mtime = mtime
                             
-                        # パフォーマンス対策: 過去7日間に動いたチャットのみパースする (重くならないための工夫)
+                        # パフォーマンス対策: 過去1時間以内に動いたチャットのみパースする (重くならないための工夫)
                         import time
-                        if mtime < time.time() - 604800:
+                        if mtime < time.time() - 3600:
+                            continue
+                            
+                        # スタック防止: 最終更新から15分(900秒)以上経過しているタスクはゾンビと見なして無視する
+                        if time.time() - mtime > 900:
                             continue
                             
                         # アクティブなタスクがあるかチェック
@@ -325,7 +333,7 @@ def get_stateless_log_status(log_path=None):
         return status
 
 def check_pending_approval():
-    """最新の会話フォルダから承認待ち (requestFeedback や ask_question) があるか、transcript.jsonl の最新ログをチェックします。"""
+    """最新の会話フォルダから承認待ち (requestFeedback や run_command 等) があるか、transcript.jsonl の最新ログをチェックします。"""
     try:
         brain_dir = os.path.expanduser("~/.gemini/antigravity/brain")
         if not os.path.exists(brain_dir):
@@ -347,6 +355,19 @@ def check_pending_approval():
                 f.seek(size - read_size)
                 lines = f.read().decode('utf-8', errors='ignore').splitlines()
                 
+            # 承認が必要なツールとそれに対応する実行結果のログ type の対応マップ
+            REQUIRED_APPROVAL_TOOLS = {
+                "run_command": "RUN_COMMAND",
+                "write_to_file": "WRITE_FILE",
+                "replace_file_content": "REPLACE_FILE_CONTENT",
+                "multi_replace_file_content": "MULTI_REPLACE_FILE_CONTENT",
+                "ask_permission": "ASK_PERMISSION",
+                "generate_image": "GENERATE_IMAGE",
+                "ask_question": "ASK_QUESTION"
+            }
+            
+            executed_types = set()
+            
             for line in reversed(lines):
                 if not line.strip(): continue
                 try:
@@ -355,17 +376,30 @@ def check_pending_approval():
                     if data.get("type") == "USER_INPUT":
                         return False
                     
+                    line_type = data.get("type")
+                    if line_type in REQUIRED_APPROVAL_TOOLS.values():
+                        executed_types.add(line_type)
+                    
                     # AIのツールコールをチェック
-                    if data.get("source") == "MODEL" and "tool_calls" in data:
+                    if data.get("source") == "MODEL" and data.get("type") == "PLANNER_RESPONSE" and "tool_calls" in data:
                         for tc in data["tool_calls"]:
-                            if tc.get("name") == "ask_question":
-                                return True
+                            name = tc.get("name")
                             
+                            # 承認が必要なツールであり、かつ逆順でまだ実行された形跡がない場合
+                            if name in REQUIRED_APPROVAL_TOOLS:
+                                target_type = REQUIRED_APPROVAL_TOOLS[name]
+                                if target_type not in executed_types:
+                                    return True
+                                    
+                            # ArtifactのRequestFeedbackのチェックも残す
                             args = tc.get("args")
                             if isinstance(args, dict):
                                 meta = args.get("ArtifactMetadata")
                                 if isinstance(meta, dict) and meta.get("RequestFeedback") is True:
                                     return True
+                        
+                        # 最新のPLANNER_RESPONSEに到達し、承認待ちが無いと判断されたら探索終了
+                        return False
                 except Exception:
                     pass
     except Exception:
@@ -449,8 +483,16 @@ def find_lsp_info(force=False):
 
 
 def fetch_quota_from_api(port, csrf_token):
-    """ローカルAPIからユーザー状態（クォータ・クレジット含む）を直接フェッチします（Node.js完全不要）。"""
-    url = f"http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus"
+    """ローカルAPI(Language Server)からクォータ情報を取得します。"""
+    # 完全に環境変数のプロキシを無効化する
+    import os
+    for k in ['http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY']:
+        if k in os.environ:
+            del os.environ[k]
+    os.environ['no_proxy'] = '*'
+
+    # 127.0.0.1 で Errno 8 が出ることがあるため localhost に変更
+    url = f"http://localhost:{port}/exa.language_server_pb.LanguageServerService/GetUserStatus"
     body_data = json.dumps({
         "metadata": {
             "ideName": "antigravity",
@@ -470,55 +512,58 @@ def fetch_quota_from_api(port, csrf_token):
         method="POST"
     )
     
-    label_to_key = {
-        "Gemini 3.5 Flash (Medium)": "F-Med",
-        "Gemini 3.5 Flash (High)": "F-High",
-        "Gemini 3.5 Flash (Low)": "F-Low",
-        "Gemini 3.1 Pro (Low)": "P-Low",
-        "Gemini 3.1 Pro (High)": "P-High",
-        "Claude Sonnet 4.6 (Thinking)": "Sonnet",
-        "Claude Opus 4.6 (Thinking)": "Opus",
-        "GPT-OSS 120B (Medium)": "GPT-120"
-    }
-    
     try:
         # プロキシ環境変数を無視するハンドラを設定 (SwiftBar環境下での接続エラー防止)
         proxy_handler = urllib.request.ProxyHandler({})
         opener = urllib.request.build_opener(proxy_handler)
         
         with opener.open(req, timeout=3.0) as response:
+            res_body = response.read().decode('utf-8')
+            
+            # --- DEBUG DUMP ---
+            try:
+                import os
+                dump_path = os.path.expanduser("~/.gemini/antigravity/daemon/api_dump.json")
+                with open(dump_path, "w") as f:
+                    f.write(res_body)
+            except:
+                pass
+            # ------------------
+
             if response.status == 200:
-                res_body = response.read().decode("utf-8")
                 data = json.loads(res_body)
                 
                 if not (data and "userStatus" in data):
                     return None
                     
                 user_status = data["userStatus"]
-                quota_data = {}
-                resets_data = {}
+                quota_data = {"Gemini": 100, "Claude_GPT": 100}
+                resets_data = {"Gemini": None, "Claude_GPT": None}
                 
                 model_config = user_status.get("cascadeModelConfigData", {})
                 client_configs = model_config.get("clientModelConfigs", [])
                 
                 for m in client_configs:
-                    label = m.get("label")
-                    key = label_to_key.get(label)
-                    if key:
-                        quota_info = m.get("quotaInfo")
-                        if quota_info:
-                            rem_frac = quota_info.get("remainingFraction")
-                            if rem_frac is not None:
-                                quota_data[key] = round(rem_frac * 100)
-                            else:
-                                quota_data[key] = 0
-                            
-                            reset_time = quota_info.get("resetTime")
+                    label = m.get("label", "")
+                    
+                    if "Gemini" in label:
+                        group_key = "Gemini"
+                    elif "Claude" in label or "GPT" in label:
+                        group_key = "Claude_GPT"
+                    else:
+                        continue
+                    
+                    quota_info = m.get("quotaInfo")
+                    if quota_info:
+                        rem_frac = quota_info.get("remainingFraction")
+                        pct = round(rem_frac * 100) if rem_frac is not None else 0
+                        reset_time = quota_info.get("resetTime")
+                        
+                        if pct < quota_data[group_key] or resets_data[group_key] is None:
+                            quota_data[group_key] = pct
                             if reset_time:
-                                resets_data[key] = reset_time
-                        else:
-                            quota_data[key] = 100
-                            
+                                resets_data[group_key] = reset_time
+                                
                 credits_data = {
                     "availablePrompt": 0,
                     "monthlyPrompt": 0,
@@ -646,6 +691,87 @@ def get_quota_color(percentage):
         return "#ff3b30"
 
 
+def generate_circular_progress_base64(percentage, display_name, reset_text):
+    """円形プログレスリングと右側のテキスト（モデル名・回復時間）を2倍サイズ(DPI 144)で合成してRetina対応で返します。"""
+    if not HAS_PILLOW:
+        return None
+    try:
+        # 横長(720x128)の画像を作成（2xサイズ、透過背景）
+        width = 720
+        height = 128
+        image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(image)
+        
+        # 1. 左端に円形リングを描画
+        size = 128
+        margin = 12
+        box = [margin, margin, size - margin, size - margin]
+        color_code = get_quota_color(percentage)
+        
+        # 背景のグレーのリング (太さ 12px)
+        draw.arc(box, start=0, end=360, fill=(60, 60, 60, 255), width=12)
+        
+        # 進捗のカラーリング (上部-90度から時計回り, 太さ 12px)
+        angle = int((percentage / 100.0) * 360)
+        if angle > 0:
+            draw.arc(box, start=-90, end=-90 + angle, fill=color_code, width=12)
+            
+        # リング中央のパーセンテージ数値 (フォントサイズ 32)
+        pct_text = f"{percentage}%"
+        try:
+            pct_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32, index=2)
+        except Exception:
+            try:
+                pct_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 32)
+            except Exception:
+                pct_font = ImageFont.load_default()
+                
+        if hasattr(draw, "textbbox"):
+            bbox = draw.textbbox((0, 0), pct_text, font=pct_font)
+            text_w = bbox[2] - bbox[0]
+            text_h = bbox[3] - bbox[1]
+        else:
+            text_w, text_h = draw.textsize(pct_text, font=pct_font) if hasattr(draw, "textsize") else (48, 28)
+            
+        text_x = (size - text_w) // 2
+        text_y = (size - text_h) // 2 - 2
+        
+        for dx, dy in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+            draw.text((text_x + dx, text_y + dy), pct_text, fill=(255, 255, 255, 255), font=pct_font)
+            
+        # 2. 右側にテキスト（モデル名とリセット時間）を描画
+        # フォント読み込み (フォントサイズ 30, 26)
+        try:
+            font_title = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 30, index=2)  # Bold
+            font_sub = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 26, index=2)    # Bold
+        except Exception:
+            try:
+                font_title = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 30)
+                font_sub = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 26)
+            except Exception:
+                font_title = ImageFont.load_default()
+                font_sub = ImageFont.load_default()
+                
+        # 描画開始位置 (X=150px)
+        text_start_x = 150
+        
+        # 1行目: モデルグループ名 (太字補強のため重ね描き)
+        for dx, dy in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+            draw.text((text_start_x + dx, 24 + dy), display_name, fill=color_code, font=font_title)
+            
+        # 2行目: 回復時間
+        sub_text = f"(Reset: {reset_text})"
+        for dx, dy in [(0, 0), (1, 0), (0, 1), (1, 1)]:
+            draw.text((text_start_x + dx, 68 + dy), sub_text, fill=color_code, font=font_sub)
+            
+        # Base64への変換 (DPIを144に設定してRetina対応にする)
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG", dpi=(144, 144))
+        img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return img_str
+    except Exception:
+        return None
+
 def format_reset_time(iso_str, lang="en"):
     """UTCのISO 8601形式の文字列を、ローカル（日本時間）の分かりやすい表記に変換します。"""
     if not iso_str:
@@ -684,39 +810,32 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
 
     delimiter = " ❘ "
 
-    model_texts = []
+    repr_str = ""
     if quotas:
-        def get_short_name(k):
-            mapping = {
-                "F-Med": "GF-M",
-                "F-High": "GF-H",
-                "F-Low": "GF-L",
-                "P-Low": "GP-L",
-                "P-High": "GP-H",
-                "Sonnet": "Sonnet",
-                "Opus": "Opus",
-                "GPT-120": "GPT",
-                "GPT": "GPT"
-            }
-            return mapping.get(k, k.split()[0][:6])
-
-        unique_models = {}
-        for key, val in quotas.items():
-            display_name = get_short_name(key)
-            if display_name not in unique_models or val < unique_models[display_name]:
-                unique_models[display_name] = val
-                
-        # Preferred order
-        order = {"GF-M": 1, "GF-H": 2, "GF-L": 3, "GP-L": 4, "GP-H": 5, "Sonnet": 6, "Opus": 7, "GPT": 8}
-        sorted_models = sorted(unique_models.items(), key=lambda x: (order.get(x[0], 99), x[0]))
+        gemini_val = quotas.get("Gemini", 100)
+        claude_val = quotas.get("Claude_GPT", 100)
         
-        for m_name, m_val in sorted_models:
-            emoji = get_quota_emoji(m_val)
-            model_texts.append(f"{m_name}:{emoji}")
+        def make_bar(val):
+            filled = max(0, min(10, round(val / 10)))
+            if val >= 100:
+                dot = "🟣"
+            elif val >= 80:
+                dot = "🔵"
+            elif val >= 60:
+                dot = "🟢"
+            elif val >= 40:
+                dot = "🟡"
+            elif val >= 20:
+                dot = "🟠"
+            else:
+                dot = "🔴"
+            return dot * filled + "⚫" * (10 - filled)
+
+        gemini_bar = make_bar(gemini_val)
+        claude_bar = make_bar(claude_val)
+        
+        repr_str = f"Gemini {gemini_bar} {gemini_val}%  ❘  Claude & GPT {claude_bar} {claude_val}%"
             
-    custom_delimiter = " "
-    repr_str = custom_delimiter.join(model_texts)
-    
     if not repr_str:
         if status["quota_exhausted"]:
             repr_str = f"AGQ: 🔴 {msg['title_exhausted']}"
@@ -732,7 +851,7 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
     title = f"{pfx} {repr_str}{color_opt}"
         
     lines = [title, "---"]
-    lines.append(f"{msg['header']} | font=sans-serif size=13 ")
+    lines.append(f"{msg['header']} | font=\"Helvetica-Bold\" size=13 color=#ffffff")
     
     # エージェント現在の状態
     state_labels = {
@@ -770,71 +889,61 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
     else:
         lines.append(f"{INDENT}{msg['api_normal']} | color=#34c759 font=sans-serif size=12")
         
-    # モデル別クォータ詳細表示
+    # モデル別クォータ詳細表示 (グループ化 & 円形プログレスリング & 週制限オミット)
     if quotas:
         lines.append("---")
         cache_status = msg["cached"] if is_cached else msg["realtime"]
-        lines.append(f"{msg['model_header']}{cache_status} | font=sans-serif size=12 ")
-        ordered_keys = ["F-Med", "F-High", "F-Low", "P-Low", "P-High", "Sonnet", "Opus", "GPT-120"]
-        full_names = {
-            "P-High": "Gemini 3.1 Pro (High)",
-            "Sonnet": "Claude Sonnet 4.6 (Thinking)",
-            "Opus": "Claude Opus 4.6 (Thinking)",
-            "GPT-120": "GPT-OSS 120B (Medium)",
-            "F-Med": "Gemini 3.5 Flash (Medium)",
-            "F-High": "Gemini 3.5 Flash (High)",
-            "F-Low": "Gemini 3.5 Flash (Low)",
-            "P-Low": "Gemini 3.1 Pro (Low)"
-        }
-        for key in ordered_keys:
+        lines.append(f"⚡️ Model Quotas {cache_status} | font=\"Helvetica-Bold\" size=12 color=#ffffff")
+        
+        # グループ定義: (キャッシュキー, 表示名, リセット情報のキー)
+        groups = [
+            ("Gemini", "Gemini Models", "Gemini"),
+            ("Claude_GPT", "Claude & GPT Models", "Claude_GPT")
+        ]
+        
+        for key, display_name, reset_key in groups:
             if key in quotas:
                 val = quotas[key]
-                name = full_names[key]
-                sphere = get_quota_sphere_emoji(val)
                 color = get_quota_color(val)
                 
-                reset_text = "—".rjust(14)
-                if resets_data and key in resets_data:
-                    try:
-                        reset_time = datetime.datetime.fromisoformat(resets_data[key].replace('Z', '+00:00'))
-                        local_reset = reset_time.astimezone()
-                        reset_text = f"↻ {local_reset.strftime('%m/%d %H:%M')}".rjust(14)
-                    except Exception:
-                        pass
+                # 100%の場合はリセット日時を "-"、それ未満は MM/DD HH:MM
+                reset_text = "—"
+                if val < 100 and resets_data and reset_key in resets_data:
+                    iso_str = resets_data[reset_key]
+                    if iso_str:
+                        try:
+                            if iso_str.endswith('Z'):
+                                iso_str = iso_str[:-1] + '+00:00'
+                            dt_utc = datetime.datetime.fromisoformat(iso_str)
+                            dt_local = dt_utc.astimezone()
+                            reset_text = dt_local.strftime('%m/%d %H:%M')
+                        except Exception:
+                            pass
                 
-                name_padded = name.ljust(35)
-                val_padded = f"{val}%".rjust(4)
+                # 円形プログレスリング画像の生成（テキスト合成版）
+                base64_img = generate_circular_progress_base64(val, display_name, reset_text)
                 
-                lines.append(f"{INDENT}{sphere} {name_padded} {val_padded}   {reset_text} | font=Menlo size=12 color={color}")
+                if base64_img:
+                    # 画像内にテキストが合成されているため、SwiftBarには画像のみを出力する
+                    lines.append(f" | image={base64_img}")
+                else:
+                    # Pillowがない場合のテキストフォールバック (2行に分割)
+                    filled = max(0, min(10, round(val / 10)))
+                    bar = "█" * filled + "░" * (10 - filled)
+                    lines.append(f"{display_name}  {bar}  {val}% | font=\"Menlo-Bold\" size=14 color={color}")
+                    lines.append(f"{INDENT}{INDENT}(Reset: {reset_text}) | font=\"Menlo-Bold\" size=12 color={color}")
         
     if credits_data:
-        lines.append("---")
-        lines.append(f"{msg['credit_header']} | font=sans-serif size=12 ")
-        
-        avail_p = credits_data.get("availablePrompt")
-        month_p = credits_data.get("monthlyPrompt")
-        if avail_p is not None and month_p:
-            remaining_p = max(0, month_p - avail_p)
-            pct = (remaining_p / month_p) * 100 if month_p > 0 else 0
-            color = "#34c759" if pct >= 80 else ("#ffcc00" if pct >= 30 else "#ff3b30")
-            lines.append(f"{INDENT}{msg['prompt_limit']}: {remaining_p:,} / {month_p:,} ({pct:.1f}%) | font=monospace size=12 color={color}")
-        
-        avail_f = credits_data.get("availableFlow")
-        month_f = credits_data.get("monthlyFlow")
-        if avail_f is not None and month_f:
-            remaining_f = max(0, month_f - avail_f)
-            pct = (remaining_f / month_f) * 100 if month_f > 0 else 0
-            color = "#34c759" if pct >= 80 else ("#ffcc00" if pct >= 30 else "#ff3b30")
-            lines.append(f"{INDENT}{msg['flow_credit']}: {remaining_f:,} / {month_f:,} ({pct:.1f}%) | font=monospace size=12 color={color}")
-            
         g1_cred = credits_data.get("googleOneAi")
         if g1_cred is not None:
-            lines.append(f"{INDENT}{msg['google_one']}: {g1_cred} | font=monospace size=12 color=#34c759")
+            lines.append("---")
+            lines.append("💳 Available Credits | font=\"Helvetica-Bold\" size=12 color=#ffffff")
+            lines.append(f"{INDENT}Google One AI Credit: {g1_cred} | font=monospace size=12 color=#34c759")
             
     # 言語選択UI
     lines.append("---")
     script_path = os.path.realpath(__file__)
-    lines.append(f"{msg['lang_header']} | font=sans-serif size=12 ")
+    lines.append(f"{msg['lang_header']} | font=\"Helvetica-Bold\" size=12 color=#ffffff")
     check_en = " [✓]" if lang == "en" else ""
     check_ja = " [✓]" if lang == "ja" else ""
     lines.append(f"{INDENT}🇺🇸 English{check_en} | terminal=false refresh=true bash=\"/usr/bin/python3\" param1=\"{script_path}\" param2=\"--set-lang\" param3=\"en\"")
@@ -842,7 +951,7 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
     
     # About セクション
     lines.append("---")
-    lines.append(f"{msg['about_header']} | font=sans-serif size=12 ")
+    lines.append(f"{msg['about_header']} | font=\"Helvetica-Bold\" size=12 color=#ffffff")
     lines.append(f"{INDENT}{msg['about_version']} | font=monospace size=11 color=#8e8e93")
     lines.append(f"{INDENT}{msg['about_website']} | font=monospace size=11 href=https://note.com/us_kabu_journal/n/nb99ef3e525ce color=#007aff")
     lines.append(f"{INDENT}{msg['about_copyright']} | font=monospace size=11 color=#8e8e93")
