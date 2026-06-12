@@ -3,21 +3,44 @@ name: Release Extension
 on:
   push:
     tags:
-      - 'v*'       # 既存: タグプッシュでのリリース
+      - 'v*'
     branches:
-      - main       # 追加: main ブランチでも実行
+      - main
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  tag:
+    name: Auto Tag on Main Push
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # フル履歴が必要 (タグ作成のため)
+          fetch-depth: 0
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          TAG="v$(date +%Y%m%d%H%M%S)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ steps.tag.outputs.tag }}
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git ${{ steps.tag.outputs.tag }}
+
+  release:
+    name: Build & Release on Tag Push
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,25 +53,11 @@ jobs:
       - name: Package Extension
         run: npx @vscode/vsce package
 
-      # ----- 新規ステップ: main ブランチのプッシュ時にタグを自動生成 -----
       - name: Determine release tag
         id: tag
         run: |
-          if [[ "${{ github.ref }}" == refs/heads/main ]]; then
-            TAG="v$(date +%Y%m%d%H%M%S)"
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          else
-            TAG="${GITHUB_REF#refs/tags/}"
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create and push tag (only on main)
-        if: github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag ${{ steps.tag.outputs.tag }}
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git ${{ steps.tag.outputs.tag }}
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release and Upload VSIX
         uses: softprops/action-gh-release@v2
