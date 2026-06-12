@@ -3,10 +3,9 @@ name: Release Extension
 on:
   push:
     tags:
-      - 'v*'
-
-permissions:
-  contents: write
+      - 'v*'       # 既存: タグプッシュでのリリース
+    branches:
+      - main       # 追加: main ブランチでも実行
 
 jobs:
   release:
@@ -14,6 +13,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # フル履歴が必要 (タグ作成のため)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -26,12 +27,45 @@ jobs:
       - name: Package Extension
         run: npx @vscode/vsce package
 
+      # ----- 新規ステップ: main ブランチのプッシュ時にタグを自動生成 -----
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            TAG="v$(date +%Y%m%d%H%M%S)"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag (only on main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag ${{ steps.tag.outputs.tag }}
+          git push origin ${{ steps.tag.outputs.tag }}
+
       - name: Create GitHub Release and Upload VSIX
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
           files: antigravity-quota-*.vsix
           draft: false
           prerelease: false
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to VS Code Marketplace
+        if: env.VSCE_PAT != ''
+        run: npx @vscode/vsce publish -p ${{ env.VSCE_PAT }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX Registry
+        if: env.OVSX_PAT != ''
+        run: npx ovsx publish -p ${{ env.OVSX_PAT }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
