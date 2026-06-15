@@ -71,9 +71,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to VS Code Marketplace
-        if: ${{ secrets.VSCE_PAT != '' }}
-        run: npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
+        if: env.VSCE_PAT != ''
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish -p $VSCE_PAT
 
       - name: Publish to Open VSX Registry
-        if: ${{ secrets.OVSX_PAT != '' }}
-        run: npx ovsx publish -p ${{ secrets.OVSX_PAT }}
+        if: env.OVSX_PAT != ''
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx ovsx publish -p $OVSX_PAT
