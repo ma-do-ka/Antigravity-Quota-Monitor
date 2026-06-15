@@ -76,7 +76,7 @@ function activate(context) {
             // 実行権限の付与 (chmod +x)
             fs.chmodSync(destStatus, 0o755);
 
-            console.log('SwiftBar plugin file successfully copied and permissions set (Streamable active as 2s).');
+            console.log('SwiftBar plugin file successfully copied and permissions set (2-second refresh active).');
 
             // 4. macOS NSStatusItem VisibleCC キャッシュの呪いを強制解除
             // Disable→Enable時にSwiftBarのメニューバーアイテムが非表示キャッシュに捕まるのを防ぐ
@@ -163,7 +163,27 @@ function forceResetVisibilityCache() {
     }
 }
 
-function deactivate() {}
+function deactivate() {
+    try {
+        const homeDir = os.homedir();
+        const defaultPluginsDir = path.join(homeDir, 'Library/Application Support/SwiftBar/plugins');
+        let pluginsDir = defaultPluginsDir;
+        try {
+            const existingDir = execSync('defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null', { encoding: 'utf-8' }).trim();
+            if (existingDir && fs.existsSync(existingDir)) {
+                pluginsDir = existingDir;
+            }
+        } catch (_) {}
+        
+        const destStatus = path.join(pluginsDir, 'antigravity_status.2s.py');
+        if (fs.existsSync(destStatus)) {
+            fs.unlinkSync(destStatus);
+            console.log('SwiftBar plugin file cleaned up on deactivate.');
+        }
+    } catch (err) {
+        console.error('Failed to clean up SwiftBar plugin on deactivate:', err);
+    }
+}
 
 module.exports = {
     activate,

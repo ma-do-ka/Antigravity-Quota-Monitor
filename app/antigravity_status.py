@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #<swiftbar.title>Antigravity Quota Monitor</swiftbar.title>
-#<swiftbar.version>2.0.1</swiftbar.version>
+#<swiftbar.version>2.4.0</swiftbar.version>
 #<swiftbar.author>Madoka</swiftbar.author>
 #<swiftbar.desc>Antigravity Quota & Credit Monitor (2-second refresh)</swiftbar.desc>
 #<swiftbar.icon>👾</swiftbar.icon>
@@ -31,8 +31,13 @@ import sys
 import os
 import time
 
-# -- DEBUG: Redirect stderr to file --
-sys.stderr = open('/tmp/agq_crash.log', 'w')
+# -- DEBUG: Redirect stderr to user-specific daemon directory --
+DAEMON_DIR = os.path.expanduser("~/.gemini/antigravity/daemon")
+try:
+    os.makedirs(DAEMON_DIR, exist_ok=True)
+    sys.stderr = open(os.path.join(DAEMON_DIR, "agq_crash.log"), "w")
+except:
+    pass
 # ------------------------------------
 import threading
 import json
@@ -60,13 +65,15 @@ warnings.filterwarnings("ignore")
 # 設定情報
 DAEMON_DIR = os.path.expanduser("~/.gemini/antigravity/daemon")
 LOG_PATTERN = os.path.join(DAEMON_DIR, "ls_*.log")
-ACTIVE_LOG_FILE = "/Users/user/Library/Logs/Antigravity/language_server.log"
+ACTIVE_LOG_FILE = os.path.expanduser("~/Library/Logs/Antigravity/language_server.log")
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/daemon/quota_cache.json")
 
+# 1 FPS Stateless Animation
+# メニューバーのアニメーション用フレーム (2秒周期更新なので、インデックスの切り替え用)
 SPINNER_FRAMES = ["✨️🤔", "💫🤔", "⭐🤔", "🌟😃"]
 MOON_FRAMES = ["💬😑", "💬😐", "💬😊", "💬😃"]
-VERSION = "2.0.1"
+VERSION = "2.4.0"
 INDENT = "\u00A0\u00A0"  # SwiftBarでトリムされないクリーンなインデント (Non-Breaking Space)
 
 # バージョンの動的取得 (package.jsonから自動連動)
@@ -79,6 +86,19 @@ try:
                 VERSION = package_data["version"]
 except Exception:
     pass
+
+def write_error_log(msg):
+    """エラーログを書き込みます。サイズが100KBを超えた場合は切り詰めてローテーションします。"""
+    log_file = os.path.join(DAEMON_DIR, "agq_error.log")
+    try:
+        if os.path.exists(log_file) and os.path.getsize(log_file) > 100 * 1024:
+            with open(log_file, "w", encoding="utf-8") as f:
+                f.write(f"--- Log rotated at {datetime.datetime.now()} ---\n")
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now()}] {msg}\n")
+    except:
+        pass
+
 
 # ユーザーの「Model Quota」ダッシュボード画面から読み取ったデフォルト初期クォータ値
 DEFAULT_QUOTAS = {
@@ -261,23 +281,32 @@ def get_stateless_log_status(log_path=None):
                     
         status["requests_last_10m"] = req_count
         
-        # 全てのconversation (transcript.jsonl) の最新1MBをスキャンし、バックグラウンドタスクが実行中か確認する
+        # 最新の数件の conversation (transcript.jsonl) のみをスキャンし、バックグラウンドタスクが実行中か確認する
         has_active_tasks = False
         try:
             brain_dir = os.path.expanduser("~/.gemini/antigravity/brain")
             latest_t_mtime = 0
             
             if os.path.exists(brain_dir):
-                import json, re
+                import json, re, time
+                # 1. すべての会話ディレクトリを取得して、更新日時でソートし、最新の5件に絞る (ディスクI/O負荷を激減させる)
+                subdirs = []
                 for d in os.listdir(brain_dir):
-                    t_path = os.path.join(brain_dir, d, ".system_generated", "logs", "transcript.jsonl")
+                    d_path = os.path.join(brain_dir, d)
+                    if os.path.isdir(d_path):
+                        subdirs.append(d_path)
+                
+                subdirs.sort(key=os.path.getmtime, reverse=True)
+                active_subdirs = subdirs[:5]
+                
+                for d_path in active_subdirs:
+                    t_path = os.path.join(d_path, ".system_generated", "logs", "transcript.jsonl")
                     if os.path.exists(t_path):
                         mtime = os.path.getmtime(t_path)
                         if mtime > latest_t_mtime:
                             latest_t_mtime = mtime
                             
                         # パフォーマンス対策: 過去1時間以内に動いたチャットのみパースする (重くならないための工夫)
-                        import time
                         if mtime < time.time() - 3600:
                             continue
                             
@@ -290,7 +319,8 @@ def get_stateless_log_status(log_path=None):
                             with open(t_path, 'rb') as f:
                                 f.seek(0, 2)
                                 size = f.tell()
-                                f.seek(max(0, size - 1000000))
+                                # パフォーマンス対策: 読み込みバッファを1MBから50KBに縮小しJSONパース負荷を下げる
+                                f.seek(max(0, size - 50000))
                                 data = f.read().decode('utf-8', errors='ignore')
                                 
                                 active_tasks = set()
@@ -312,6 +342,30 @@ def get_stateless_log_status(log_path=None):
                                 
                                 if len(active_tasks) > 0:
                                     has_active_tasks = True
+                                    
+                                # 2. 最新ログの状態とmtimeによる「Working」の動的検知
+                                # 会話ログが直近 120 秒以内に更新されている場合
+                                if time.time() - mtime <= 120:
+                                    lines = [l for l in data.split('\n') if l.strip()]
+                                    if lines:
+                                        last_line = lines[-1]
+                                        try:
+                                            last_obj = json.loads(last_line)
+                                            last_type = last_obj.get("type")
+                                            last_source = last_obj.get("source")
+                                            
+                                            # 最後の行がモデルの応答であり、かつ tool_calls を含まない場合は「返答完了」とみなす
+                                            is_final_reply = False
+                                            if last_source == "MODEL" and last_type == "PLANNER_RESPONSE":
+                                                t_calls = last_obj.get("tool_calls")
+                                                if not t_calls or len(t_calls) == 0:
+                                                    is_final_reply = True
+                                                    
+                                            # 最終返答を返していない（＝まだ自律動作が続いている）場合は、タスク実行中とみなす
+                                            if not is_final_reply:
+                                                has_active_tasks = True
+                                        except:
+                                            pass
                         except: pass
 
             # 全てのタスクがなく、かつ返信完了（LLM思考完了）ならThinkingを直ちに解除
@@ -328,12 +382,11 @@ def get_stateless_log_status(log_path=None):
                 
         return status
     except Exception as e:
-        with open("/tmp/agq_error.log", "a") as f:
-            f.write(f"Stateless parser error: {e}\n")
+        write_error_log(f"Stateless parser error: {e}")
         return status
 
 def check_pending_approval():
-    """最新の会話フォルダから承認待ち (requestFeedback や run_command 等) があるか、transcript.jsonl の最新ログをチェックします。"""
+    """最新の会話フォルダ群から承認待ち (requestFeedback や run_command 等) があるか、transcript.jsonl の最新ログをチェックします。"""
     try:
         brain_dir = os.path.expanduser("~/.gemini/antigravity/brain")
         if not os.path.exists(brain_dir):
@@ -343,65 +396,85 @@ def check_pending_approval():
         if not folders:
             return False
             
-        latest_folder = max(folders, key=os.path.getmtime)
-        transcript_path = os.path.join(latest_folder, ".system_generated", "logs", "transcript.jsonl")
+        # 最新の5つのフォルダに絞って走査する (I/O負荷軽減と複数セッション監視の並立)
+        folders.sort(key=os.path.getmtime, reverse=True)
+        active_folders = folders[:5]
         
-        if os.path.exists(transcript_path):
-            # 後ろから少しだけ読むための簡易最適化
-            with open(transcript_path, "rb") as f:
-                f.seek(0, 2)
-                size = f.tell()
-                read_size = min(size, 200000)
-                f.seek(size - read_size)
-                lines = f.read().decode('utf-8', errors='ignore').splitlines()
+        # 承認が必要なツールとそれに対応する実行結果のログ type の対応マップ
+        REQUIRED_APPROVAL_TOOLS = {
+            "run_command": "RUN_COMMAND",
+            "write_to_file": "WRITE_FILE",
+            "replace_file_content": "REPLACE_FILE_CONTENT",
+            "multi_replace_file_content": "MULTI_REPLACE_FILE_CONTENT",
+            "ask_permission": "ASK_PERMISSION",
+            "generate_image": "GENERATE_IMAGE",
+            "ask_question": "ASK_QUESTION"
+        }
+        
+        for folder_path in active_folders:
+            transcript_path = os.path.join(folder_path, ".system_generated", "logs", "transcript.jsonl")
+            if not os.path.exists(transcript_path):
+                continue
                 
-            # 承認が必要なツールとそれに対応する実行結果のログ type の対応マップ
-            REQUIRED_APPROVAL_TOOLS = {
-                "run_command": "RUN_COMMAND",
-                "write_to_file": "WRITE_FILE",
-                "replace_file_content": "REPLACE_FILE_CONTENT",
-                "multi_replace_file_content": "MULTI_REPLACE_FILE_CONTENT",
-                "ask_permission": "ASK_PERMISSION",
-                "generate_image": "GENERATE_IMAGE",
-                "ask_question": "ASK_QUESTION"
-            }
-            
-            executed_types = set()
-            
-            for line in reversed(lines):
-                if not line.strip(): continue
-                try:
-                    data = json.loads(line)
-                    # ユーザーの入力があれば、承認待ちは解除されている
-                    if data.get("type") == "USER_INPUT":
-                        return False
-                    
-                    line_type = data.get("type")
-                    if line_type in REQUIRED_APPROVAL_TOOLS.values():
-                        executed_types.add(line_type)
-                    
-                    # AIのツールコールをチェック
-                    if data.get("source") == "MODEL" and data.get("type") == "PLANNER_RESPONSE" and "tool_calls" in data:
-                        for tc in data["tool_calls"]:
-                            name = tc.get("name")
-                            
-                            # 承認が必要なツールであり、かつ逆順でまだ実行された形跡がない場合
-                            if name in REQUIRED_APPROVAL_TOOLS:
-                                target_type = REQUIRED_APPROVAL_TOOLS[name]
-                                if target_type not in executed_types:
-                                    return True
-                                    
-                            # ArtifactのRequestFeedbackのチェックも残す
-                            args = tc.get("args")
-                            if isinstance(args, dict):
-                                meta = args.get("ArtifactMetadata")
-                                if isinstance(meta, dict) and meta.get("RequestFeedback") is True:
-                                    return True
+            try:
+                with open(transcript_path, "rb") as f:
+                    f.seek(0, 2)
+                    size = f.tell()
+                    # 読み込みサイズを200KBに制限してパフォーマンス確保
+                    read_size = min(size, 200000)
+                    f.seek(size - read_size)
+                    lines = f.read().decode('utf-8', errors='ignore').splitlines()
+                
+                executed_types = set()
+                
+                for line in reversed(lines):
+                    if not line.strip(): continue
+                    try:
+                        data = json.loads(line)
+                        # ユーザーの入力があれば、このセッションは承認待ちは解除されているため次のフォルダへ
+                        if data.get("type") == "USER_INPUT":
+                            break
                         
-                        # 最新のPLANNER_RESPONSEに到達し、承認待ちが無いと判断されたら探索終了
-                        return False
-                except Exception:
-                    pass
+                        line_type = data.get("type")
+                        if line_type in REQUIRED_APPROVAL_TOOLS.values():
+                            status_val = data.get("status")
+                            if status_val in ("BLOCKED", "PENDING", "WAITING"):
+                                return True
+                            else:
+                                executed_types.add(line_type)
+                        # "CODE_ACTION" が検出された場合、ファイル編集系は実行済みとしてマーク
+                        if line_type == "CODE_ACTION":
+                            executed_types.add("WRITE_FILE")
+                            executed_types.add("REPLACE_FILE_CONTENT")
+                            executed_types.add("MULTI_REPLACE_FILE_CONTENT")
+                        
+                        # AIのツールコールをチェック
+                        if data.get("source") == "MODEL" and data.get("type") == "PLANNER_RESPONSE":
+                            tool_calls = data.get("tool_calls")
+                            if isinstance(tool_calls, list):
+                                for tc in tool_calls:
+                                    name = tc.get("name")
+                                    
+                                    # 承認が必要なツールであり、かつ逆順でまだ実行された形跡がない場合
+                                    if name in REQUIRED_APPROVAL_TOOLS:
+                                        target_type = REQUIRED_APPROVAL_TOOLS[name]
+                                        if target_type not in executed_types:
+                                            return True
+                                            
+                                    # ArtifactのRequestFeedbackのチェックも残す
+                                    args = tc.get("args")
+                                    if isinstance(args, dict):
+                                        meta = args.get("ArtifactMetadata")
+                                        if isinstance(meta, dict) and meta.get("RequestFeedback") is True:
+                                            return True
+                            
+                            # 最新のPLANNER_RESPONSEに到達し、承認待ちが無いと判断されたらこのフォルダの探索終了
+                            break
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            
     except Exception:
         pass
     return False
@@ -409,16 +482,16 @@ def check_pending_approval():
 
 def detect_agent_state(status, pending_flag=None):
     """LSPプロセス状態、ログ、会話フォルダからエージェントの状態を特定します。"""
-    if not status.get("active", False):
-        return "offline"
-        
-    # パフォーマンスのために毎ループのフォルダ走査を最適化（フラグ経由など）
+    # 承認待ち、または思考中(タスク実行中)の場合は、LSPがアクティブでなくても稼働中と判定する
     is_pending = pending_flag if pending_flag is not None else check_pending_approval()
     if is_pending:
         return "pending"
         
     if status.get("is_thinking", False):
         return "thinking"
+        
+    if not status.get("active", False):
+        return "offline"
         
     return "idle"
 
@@ -477,8 +550,7 @@ def find_lsp_info(force=False):
                     
         return servers
     except Exception as e:
-        with open("/tmp/agq_error.log", "a") as f:
-            f.write(f"find_lsp_info ERROR: {e}\n")
+        write_error_log(f"find_lsp_info ERROR: {e}")
     return []
 
 
@@ -593,8 +665,7 @@ def fetch_quota_from_api(port, csrf_token):
                     "credits": credits_data
                 }
     except Exception as e:
-        with open("/tmp/agq_error.log", "a") as f:
-            f.write(f"fetch_quota_from_api ERROR (port {port}): {e}\n")
+        write_error_log(f"fetch_quota_from_api ERROR (port {port}): {e}")
     return None
 
 
@@ -691,6 +762,27 @@ def get_quota_color(percentage):
         return "#ff3b30"
 
 
+_FONT_CACHE = {}
+
+def get_cached_font(font_path, size, index=0):
+    """フォントオブジェクトをキャッシュから取得します (ファイルI/O削減)。"""
+    key = (font_path, size, index)
+    if key not in _FONT_CACHE:
+        try:
+            if index > 0:
+                _FONT_CACHE[key] = ImageFont.truetype(font_path, size, index=index)
+            else:
+                _FONT_CACHE[key] = ImageFont.truetype(font_path, size)
+        except Exception:
+            try:
+                # フォールバックフォント
+                fallback_path = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+                _FONT_CACHE[key] = ImageFont.truetype(fallback_path, size)
+            except Exception:
+                _FONT_CACHE[key] = ImageFont.load_default()
+    return _FONT_CACHE[key]
+
+
 def generate_circular_progress_base64(percentage, display_name, reset_text):
     """円形プログレスリングと右側のテキスト（モデル名・回復時間）を2倍サイズ(DPI 144)で合成してRetina対応で返します。"""
     if not HAS_PILLOW:
@@ -718,13 +810,7 @@ def generate_circular_progress_base64(percentage, display_name, reset_text):
             
         # リング中央のパーセンテージ数値 (フォントサイズ 32)
         pct_text = f"{percentage}%"
-        try:
-            pct_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32, index=2)
-        except Exception:
-            try:
-                pct_font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 32)
-            except Exception:
-                pct_font = ImageFont.load_default()
+        pct_font = get_cached_font("/System/Library/Fonts/Helvetica.ttc", 32, index=2)
                 
         if hasattr(draw, "textbbox"):
             bbox = draw.textbbox((0, 0), pct_text, font=pct_font)
@@ -741,16 +827,8 @@ def generate_circular_progress_base64(percentage, display_name, reset_text):
             
         # 2. 右側にテキスト（モデル名とリセット時間）を描画
         # フォント読み込み (フォントサイズ 30, 26)
-        try:
-            font_title = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 30, index=2)  # Bold
-            font_sub = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 26, index=2)    # Bold
-        except Exception:
-            try:
-                font_title = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 30)
-                font_sub = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 26)
-            except Exception:
-                font_title = ImageFont.load_default()
-                font_sub = ImageFont.load_default()
+        font_title = get_cached_font("/System/Library/Fonts/Helvetica.ttc", 30, index=2)
+        font_sub = get_cached_font("/System/Library/Fonts/Helvetica.ttc", 26, index=2)
                 
         # 描画開始位置 (X=150px)
         text_start_x = 150
@@ -965,6 +1043,23 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
 
 
 def do_bg_fetch():
+    lock_file = os.path.expanduser("~/.gemini/antigravity/daemon/fetch.lock")
+    if os.path.exists(lock_file):
+        try:
+            mtime = os.path.getmtime(lock_file)
+            if time.time() - mtime < 30:  # 30秒以内のロックがあればスキップ
+                return
+        except:
+            pass
+
+    # ロック取得
+    try:
+        os.makedirs(os.path.dirname(lock_file), exist_ok=True)
+        with open(lock_file, "w") as f:
+            f.write(str(os.getpid()))
+    except:
+        pass
+
     try:
         servers = find_lsp_info(force=True)
         if not servers:
@@ -989,8 +1084,14 @@ def do_bg_fetch():
             if success:
                 break
     except Exception as e:
-        with open("/tmp/agq_error.log", "a") as f:
-            f.write(f"BG fetch error: {e}\n")
+        write_error_log(f"BG fetch error: {e}")
+    finally:
+        # ロック解除
+        try:
+            if os.path.exists(lock_file):
+                os.remove(lock_file)
+        except:
+            pass
 
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--set-lang":

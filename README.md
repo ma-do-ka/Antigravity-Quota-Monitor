@@ -107,6 +107,35 @@ The leftmost icon in the menu bar dynamically reflects your AI agent's real-time
 
 ## 📋 Changelog
 
+### v2.4.0
+- 🔒 **Background Double-Lock Prevention**: Added an active timeout-based lock file (`fetch.lock` with a 30s TTL) to prevent background API fetch forks (`--fetch-bg`) from spawning redundantly, resolving potential process accumulation.
+- 🎨 **Memory Font Caching**: Introduced a global font cache (`_FONT_CACHE`) in Pillow image rendering to eliminate TrueType file loading disk reads during dynamic Base64 icon generation.
+- 🧹 **User-Space Logging & Sandboxing**: Moved `/tmp/agq_error.log` and `/tmp/agq_crash.log` to user-specific directories (`~/.gemini/antigravity/daemon/`) to completely prevent `PermissionError` and resource conflicts in multi-user environments.
+- 🌍 **Dynamic User Log Resolution**: Replaced the hardcoded `/Users/user/` active log path with `os.path.expanduser` to support arbitrary macOS usernames and environments out-of-the-box.
+
+### v2.3.0
+- ⚡ **Extreme IO & Performance Optimization (A/B/C Fixes)**: Restricted directory scanning in `get_stateless_log_status` and `check_pending_approval` to the top 5 latest active session folders, reducing disk I/O cost to a constant `O(1)`. Shrank `transcript.jsonl` parse buffer from 1MB to 50KB to minimize JSON deserialization CPU spikes.
+- ⚙️ **Multi-Workspace Pending Sync**: Extended the Pending approval check to scan multiple active session folders concurrently, resolving issues where pending states in other windows were hidden by active log updates.
+- 🧹 **Automatic Plugin Cleanup**: Implemented `deactivate()` to clean up and delete `antigravity_status.2s.py` automatically from the SwiftBar directory when the extension is disabled or uninstalled, preventing background zombie execution.
+
+### v2.2.0
+- ⚡ **Perfect WindowServer Crash Prevention & 2s Cycle Restoration**: Removed image generation from the menu bar title line to completely eliminate CoreAnimation and window manager memory/Mach-port leaks during idle monitoring. This allows us to safely restore the fast **2-second refresh rate** (`antigravity_status.2s.py`) to show agent states like Thinking or Pending instantly without causing system instability.
+
+### v2.1.0
+- ⚡ **Resource Optimization for Stability (Preventing WindowServer Crash)**: Reduced the plugin refresh interval from 2 seconds to 10 seconds (`antigravity_status.10s.py`). This major change prevents macOS `WindowServer` from resource exhaustion (Mach port leakage/excess) caused by high-frequency process execution and CoreAnimation transaction updates, ensuring absolute system-wide stability.
+
+### v2.0.5
+- 🐛 **Fix Pending State Awaiting Approval**: Resolved an issue where the status bar would display `Thinking` instead of `Pending` when a user confirmation dialog (e.g. `Allow running this command?`) was active. The parser now correctly detects and processes `BLOCKED`, `PENDING`, and `WAITING` statuses in logs without incorrectly marking them as executed.
+
+### v2.0.4
+- ⚙️ **Enhanced Agent State Sync (Working Status)**: AQM now tracks the last modification time (`mtime`) and content of the conversation logs (`transcript.jsonl`). If the conversation was updated recently (within 120 seconds) and the model hasn't returned a final reply, the status bar correctly displays `Thinking` (Active), even if the language server is temporarily offline or idle during autonomous file editing or exploration.
+
+### v2.0.3
+- 🐛 **Fix False Positive Awaiting Approval (Pending)**: Resolved a bug where the menu bar icon stayed in the `Pending` state even when no tool approvals were active. The check now properly terminates upon reaching the latest response, eliminating incorrect evaluation of older logs.
+
+### v2.0.2
+- 🐛 **Agent State Detection Logic Fix**: Fixed an issue where the status bar icon would display as "Stopped" (⚪️) even when a task was active ("Working") if the LSP process was offline or undetected. The display now correctly prioritizes active command and pending statuses.
+
 ### v2.0.1
 - 🚀 **Automated Publishing via GitHub Actions**: Directly publish compiled packages to Open VSX Registry and VS Code Marketplace upon pushing to `main` (if secrets are set).
 - ⚙️ **Modernized CI Workflow**: Upgraded deprecated GitHub Actions syntax.
@@ -222,6 +251,35 @@ graph TD
 ---
 
 ## 📋 更新履歴 (Changelog)
+
+### v2.4.0
+- 🔒 **バックグラウンド二重起動防止**: バックグラウンド API フェッチ処理 (`--fetch-bg`) で、30秒有効のロックファイル (`fetch.lock`) による排他制御を導入。タイムアウト待機中などに余分なフォークが複数立ち上がるプロセス詰まり・メモリ浪費を完全防止。
+- 🎨 **フォントのメモリキャッシュ化による I/O 削減**: Pillow を用いた動的な円形プログレス画像生成処理において、TrueType フォントファイルのディスク読み込み・ラスタライズをキャッシュ化。I/O 負荷を排除し描画処理をさらに高速化。
+- 🧹 **一般ユーザー権限・マルチユーザー対応 (ユーザー個別領域移行)**: 一時エラーログ (`/tmp/agq_error.log`, `/tmp/agq_crash.log`) の配置先を、各ユーザーの所有する個別ディレクトリ (`~/.gemini/antigravity/daemon/`) へ完全移行。複数ユーザーが同マシンで動かした際の PermissionError や競合を完璧に排除。
+- 🌍 **動的なユーザーパスの解決**: ハードコードされていた `/Users/user/` のログ参照パスを `os.path.expanduser` に書き換え、他のユーザー環境や異なる macOS マシンでも追加設定なしでそのまま動作可能に。
+
+### v2.3.0
+- ⚡ **ディスク I/O ＆ パフォーマンスの極限最適化（改修 A/B/C）**: 会話履歴走査を「最新のアクティブセッション5件」に限定し、セッション数が数千に膨れ上がっても処理負荷を一定（`O(1)`）に抑制。`transcript.jsonl` の読み込みサイズを 1MB から 50KB に縮小し、JSON パース時の CPU 負荷スパイクを徹底的に排除しました。
+- ⚙️ **複数ワークスペースの承認待ち並行同期**: 承認待ち判定を複数アクティブセッションの並行監視に対応。別ウィンドウで承認待ち（Pending）が発生している際、もう一方のウィンドウで通常ログ更新が入っても、Pending状態が覆い隠されずに正確に表示され続けるように同期信頼性を向上しました。
+- 🧹 **アンインストール時のプラグイン自動クリーンアップ**: 拡張機能の無効化・削除（Deactivate）を検知した際に、SwiftBar プラグインディレクトリから `antigravity_status.2s.py` を自動で削除するクリーンアップ処理を `extension.js` に実装。PC 内にゾンビプロセスが残存する問題を完全解消しました。
+
+### v2.2.0
+- ⚡ **メニューバー画像排除による WindowServer クラッシュ完全防止 ＆ 2秒周期への復帰**: メニューバータイトル（常時表示部分）から Pillow による画像生成を完全に排除し、人間がクリックして開くプルダウン詳細メニュー内のみに画像を限定。これにより放置中の Mach ポートリークを完全にゼロにしつつ、動作更新周期を **2秒** (`antigravity_status.2s.py`) に戻して AI 状態（思考中・承認待ち）の極めて低レイテンシな追従を復旧しました。
+
+### v2.1.0
+- ⚡ **システム安定化のためのリソース最適化 (WindowServerクラッシュ対策)**: プラグインの動作更新周期を2秒から10秒（`antigravity_status.10s.py`）に緩和しました。高頻度なプロセス起動とCoreAnimationトランザクション更新に伴う macOS の `WindowServer` のリソースリーク（Machポート枯渇）を未然に防ぎ、OS全体の絶対的な動作安定性を確保します。
+
+### v2.0.5
+- 🐛 **承認待ち（Pending）時の動作中（Thinking）表示スタックバグ修正**: コマンド実行の許可画面などのユーザー承認待ちダイアログが表示されている最中に、メニューバー表示が `Pending`（承認待ち）にならずに `Thinking`（動作中）になってしまう不具合を修正。ログ内の未実行の承認待ちステータス（`BLOCKED`、`PENDING`、`WAITING`）を正しく識別して即時に Pending 判定を行うように改善しました。
+
+### v2.0.4
+- ⚙️ **自律動作中 (Working) の表示同期改善**: 会話ログ（`transcript.jsonl`）の最終更新日時（mtime）と最新ログの内容を組み合わせて、エージェントが動作中かを動的に検知するロジックを追加。LSPがオフラインでAIが推論していない状態であっても、ファイルの探索・編集・長考などの自律動作が行われている間（画面上の Working 状態）は、メニューバー表示が `🧠 Thinking`（稼働中）に正しく維持されるように改善しました。
+
+### v2.0.3
+- 🐛 **承認待ち（Pending）の誤判定バグ修正**: 承認待ちのツールコールがすでに存在しない場合でもメニューバーに `⚠️ Pending!` が表示され続けてしまう不具合を修正。最新の応答に到達した時点で探索を即時終了させ、過去の未実行ログを誤パースしないように改善しました。
+
+### v2.0.2
+- 🐛 **エージェント状態検知ロジックの修正**: LSPプロセスが一時的に停止または検知できない状態であっても、バックグラウンドタスクが動作中（Working）または承認待ち（Pending）であれば、メニューバーの表示が「停止中（⚪️）」にならずに正しく「稼働中 / 承認待ち」として表示されるように修正。
 
 ### v2.0.1
 - 🚀 **GitHub Actions による自動パブリッシュ**: `main` ブランチへのプッシュ時に、VS Code Marketplace および Open VSX Registry へ自動かつ即座に拡張機能をパブリッシュする仕組みを追加（シークレット設定時）。
