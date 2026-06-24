@@ -14,11 +14,11 @@
 
 **Antigravity Quota Monitor (AQM)** is a premium macOS menu bar utility (SwiftBar / xbar plugin) designed to monitor real-time API quotas, reset times, and monthly credits for your LLMs under the Antigravity agent system.
 
-Starting with **v2.4.0**, AQM has been completely redesigned with an ultra-sleek **10-Dot System Bar Gauge** and **Dynamic In-Menu Progress Rings** to offer a premium, space-saving desktop dashboard experience.
+Starting with **v2.6.1**, AQM has been completely redesigned with an ultra-sleek **10-Dot System Bar Gauge** and **Dynamic In-Menu Progress Rings** to offer a premium, space-saving desktop dashboard experience.
 
 ---
 
-## ✨ Features (v2.4.0)
+## ✨ Features (v2.6.1)
 
 *   **🟢 10-Dot System Bar Gauge (New)**: Replaced verbose textual status items on your menu bar with a beautiful, space-efficient horizontal 10-dot gauge (`🔴🟢🔵🟣🟡🟠`). You can grasp your exact quota level (in 10% steps) at a single glance.
 *   **🍩 Dynamic In-Menu Progress Rings (New)**: Detailed dropdown now generates high-definition circular progress rings dynamically on-the-fly using `Pillow`. 
@@ -107,6 +107,13 @@ The leftmost icon in the menu bar dynamically reflects your AI agent's real-time
 
 ## 📋 Changelog
 
+### v2.6.1
+- ⚙️ **Rollback Quota Estimation (Correctness Focus)**: Completely rolled back the local caching algorithm that separately estimated 5h and Weekly quotas. Now directly displays raw API values for Gemini and Claude/GPT models with their actual reset type suffix (`[5h]` or `[Weekly]`). Added safety cache-clearing logic to automatically reset invalid v2.6.0 keys to fallback defaults.
+
+### v2.6.0
+- ⚡ **Shifting Back to 10s Cycle for CPU Optimization**: To prevent the macOS `WindowServer` and CPU usage spikes (up to 18%+) caused by process accumulation in previous releases, we have shifted the plugin refresh interval back to **10 seconds** (`antigravity_status.10s.py`). This reduces CPU usage to a safe range of 3-4% (approx. 80% reduction).
+- ✨ **Separate 5h and Weekly Quota Caches (Multi-Quota Display)**: Designed an intelligent local caching algorithm to separately track and display both the **5-Hour (5h)** and **Weekly** quotas for Gemini and Claude/GPT models in the dropdown menu. This solves the API limitation where only the single most restrictive percentage was visible.
+
 ### v2.4.0
 - 🔒 **Background Double-Lock Prevention**: Added an active timeout-based lock file (`fetch.lock` with a 30s TTL) to prevent background API fetch forks (`--fetch-bg`) from spawning redundantly, resolving potential process accumulation.
 - 🎨 **Memory Font Caching**: Introduced a global font cache (`_FONT_CACHE`) in Pillow image rendering to eliminate TrueType file loading disk reads during dynamic Base64 icon generation.
@@ -159,11 +166,11 @@ The leftmost icon in the menu bar dynamically reflects your AI agent's real-time
 
 **Antigravity Quota Monitor (AQM)** は、macOS のメニューバー（システムバー）および VS Code に、Antigravity（Gemini）エージェント環境下の利用クォータ残量、リセット時間、およびクレジット制限枠を**美しく可視化するプレミアムユーティリティ**です。
 
-最新バージョンである **v2.4.0** では、デスクトップ領域を邪魔しない**10ドット・システムバーゲージ**と、詳細メニュー内の**動的プログレスリング画像表示**を新たに搭載し、圧倒的にスマートなUIへ進化しました。
+最新バージョンである **v2.6.1** では、デスクトップ領域を邪魔しない**10ドット・システムバーゲージ**と、詳細メニュー内の**動的プログレスリング画像表示**を新たに搭載し、圧倒的にスマートなUIへ進化しました。
 
 ---
 
-## ✨ v2.4.0 の新機能と特長
+## ✨ v2.6.1 の新機能と特長
 
 *   **🟢 10ドット・システムバーゲージ (New)**: メニューバー上の長ったらしい文字列表示を廃止し、省スペースで直感的な10個のカラードット（`🔴🟢🔵🟣🟡🟠`）によるゲージ表示に変更。残りクォータを10%刻みで直感的に把握できます。
 *   **🍩 動的プログレスリング画像表示 (New)**: 詳細ドロップダウン内に、`Pillow` ライブラリを用いてその場で高解像度な円形進捗リング画像を動的に生成して表示します。
@@ -251,6 +258,13 @@ graph TD
 ---
 
 ## 📋 更新履歴 (Changelog)
+
+### v2.6.1
+- ⚙️ **クォータ推測表示の廃止（正確性徹底への差し戻し）**: 前回のリリースで導入された、キャッシュ上で5時間制限と週制限を個別に推測・仕分ける疑似マルチ表示を完全にロールバックしました。APIから提供される生データ（最も厳しい現在のクォータ）をそのまま誠実に表示し、判定された正確な制限タイプ `[5h]` または `[Weekly]` のみを付与する元の正しい仕様に戻しました。また、2.6.0の個別キャッシュキー（`Gemini_5h`等）が残存している場合は自動検知して安全にデフォルト状態へ初期化するクリーンアップ処理を導入しました。
+
+### v2.6.0
+- ⚡ **CPU負荷低減のための10秒周期（10s）移行**: 前回のリリースによるプロセス蓄積で発生していた macOS `WindowServer` および CPU 使用率の異常急増（18%以上）を防ぐため、動作更新周期を **10秒（`antigravity_status.10s.py`）** に差し戻しました。これにより CPU 負荷を 3-4% 以下の正常範囲へ低減（約 80% 削減）しました。
+- ✨ **5時間制限と週制限の個別キャッシュ表示（マルチ表示）**: ローカル API が最も厳しい単一の代表値のみを返す制約を解消するため、キャッシュシステム上で 5-Hour（5h）と Weekly（週制限）の双方を独立したスロットで保持し、詳細メニュー内で 4つの円形 Progress Ring を並べて個別に追跡できる疑似マルチ表示を実装しました。
 
 ### v2.4.0
 - 🔒 **バックグラウンド二重起動防止**: バックグラウンド API フェッチ処理 (`--fetch-bg`) で、30秒有効のロックファイル (`fetch.lock`) による排他制御を導入。タイムアウト待機中などに余分なフォークが複数立ち上がるプロセス詰まり・メモリ浪費を完全防止。

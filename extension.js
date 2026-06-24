@@ -67,8 +67,8 @@ function activate(context) {
             }
 
             // 新しいコピー先パス (常駐ストリーミング形式: 認識のために時間指定が必要)
-            // macOSの NSStatusItem VisibleCC キャッシュの呪いを確実に回避するため、2sへ名前を変更します。
-            const destStatus = path.join(pluginsDir, 'antigravity_status.2s.py');
+            // macOSの NSStatusItem VisibleCC キャッシュの呪いを確実に回避するため、10sへ名前を変更します。
+            const destStatus = path.join(pluginsDir, 'antigravity_status.10s.py');
 
             // ファイルのコピー
             fs.copyFileSync(srcStatus, destStatus);
@@ -76,7 +76,7 @@ function activate(context) {
             // 実行権限の付与 (chmod +x)
             fs.chmodSync(destStatus, 0o755);
 
-            console.log('SwiftBar plugin file successfully copied and permissions set (2-second refresh active).');
+            console.log('SwiftBar plugin file successfully copied and permissions set (10-second refresh active).');
 
             // 4. macOS NSStatusItem VisibleCC キャッシュの呪いを強制解除
             // Disable→Enable時にSwiftBarのメニューバーアイテムが非表示キャッシュに捕まるのを防ぐ
@@ -175,7 +175,7 @@ function deactivate() {
             }
         } catch (_) {}
         
-        const destStatus = path.join(pluginsDir, 'antigravity_status.2s.py');
+        const destStatus = path.join(pluginsDir, 'antigravity_status.10s.py');
         if (fs.existsSync(destStatus)) {
             fs.unlinkSync(destStatus);
             console.log('SwiftBar plugin file cleaned up on deactivate.');

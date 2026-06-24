@@ -1,9 +1,9 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #<swiftbar.title>Antigravity Quota Monitor</swiftbar.title>
-#<swiftbar.version>2.4.0</swiftbar.version>
+#<swiftbar.version>2.6.1</swiftbar.version>
 #<swiftbar.author>Madoka</swiftbar.author>
-#<swiftbar.desc>Antigravity Quota & Credit Monitor (2-second refresh)</swiftbar.desc>
+#<swiftbar.desc>Antigravity Quota & Credit Monitor (10-second refresh)</swiftbar.desc>
 #<swiftbar.icon>👾</swiftbar.icon>
 #<swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
 #
@@ -70,10 +70,10 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/daemon/quota_cache.json")
 
 # 1 FPS Stateless Animation
-# メニューバーのアニメーション用フレーム (2秒周期更新なので、インデックスの切り替え用)
+# メニューバーのアニメーション用フレーム (10秒周期更新なので、インデックスの切り替え用)
 SPINNER_FRAMES = ["✨️🤔", "💫🤔", "⭐🤔", "🌟😃"]
 MOON_FRAMES = ["💬😑", "💬😐", "💬😊", "💬😃"]
-VERSION = "2.4.0"
+VERSION = "2.6.0"
 INDENT = "\u00A0\u00A0"  # SwiftBarでトリムされないクリーンなインデント (Non-Breaking Space)
 
 # バージョンの動的取得 (package.jsonから自動連動)
@@ -291,13 +291,16 @@ def get_stateless_log_status(log_path=None):
                 import json, re, time
                 # 1. すべての会話ディレクトリを取得して、更新日時でソートし、最新の5件に絞る (ディスクI/O負荷を激減させる)
                 subdirs = []
-                for d in os.listdir(brain_dir):
-                    d_path = os.path.join(brain_dir, d)
-                    if os.path.isdir(d_path):
-                        subdirs.append(d_path)
+                with os.scandir(brain_dir) as it:
+                    for entry in it:
+                        if entry.is_dir():
+                            try:
+                                subdirs.append((entry.path, entry.stat().st_mtime))
+                            except OSError:
+                                pass
                 
-                subdirs.sort(key=os.path.getmtime, reverse=True)
-                active_subdirs = subdirs[:5]
+                subdirs.sort(key=lambda x: x[1], reverse=True)
+                active_subdirs = [x[0] for x in subdirs[:5]]
                 
                 for d_path in active_subdirs:
                     t_path = os.path.join(d_path, ".system_generated", "logs", "transcript.jsonl")
@@ -392,13 +395,20 @@ def check_pending_approval():
         if not os.path.exists(brain_dir):
             return False
             
-        folders = [os.path.join(brain_dir, d) for d in os.listdir(brain_dir) if os.path.isdir(os.path.join(brain_dir, d))]
+        folders = []
+        with os.scandir(brain_dir) as it:
+            for entry in it:
+                if entry.is_dir():
+                    try:
+                        folders.append((entry.path, entry.stat().st_mtime))
+                    except OSError:
+                        pass
         if not folders:
             return False
             
         # 最新の5つのフォルダに絞って走査する (I/O負荷軽減と複数セッション監視の並立)
-        folders.sort(key=os.path.getmtime, reverse=True)
-        active_folders = folders[:5]
+        folders.sort(key=lambda x: x[1], reverse=True)
+        active_folders = [x[0] for x in folders[:5]]
         
         # 承認が必要なツールとそれに対応する実行結果のログ type の対応マップ
         REQUIRED_APPROVAL_TOOLS = {
@@ -689,9 +699,16 @@ def load_quota_cache_data():
                         data["resets"] = {}
                     if "language" not in data:
                         data["language"] = "en"
+                    
+                    # もし2.6.0の個別キーが含まれている場合は、キャッシュを初期化して差し戻す
+                    q = data["quota"]
+                    if "Gemini_5h" in q or "Claude_GPT_5h" in q:
+                        data["quota"] = DEFAULT_QUOTAS.copy()
+                        data["resets"] = {}
+                        save_quota_cache_data(data)
                     return data
-        except Exception:
-            pass
+        except Exception as e:
+            write_error_log(f"load_quota_cache_data migration error: {e}")
             
     initial_data = {
         "last_fetch_time": "1970-01-01T00:00:00",
@@ -705,13 +722,34 @@ def load_quota_cache_data():
 
 
 def save_quota_cache_data(cache_data):
-    """データをキャッシュファイルに保存します。"""
+    """データをキャッシュファイルにアトミックに保存します。"""
     try:
-        os.makedirs(os.path.dirname(QUOTA_CACHE_FILE), exist_ok=True)
-        with open(QUOTA_CACHE_FILE, "w", encoding="utf-8") as f:
+        dest_dir = os.path.dirname(QUOTA_CACHE_FILE)
+        os.makedirs(dest_dir, exist_ok=True)
+        import tempfile
+        # 同一ファイルシステム内に一時ファイルを作成
+        with tempfile.NamedTemporaryFile("w", dir=dest_dir, delete=False, encoding="utf-8") as f:
             json.dump(cache_data, f, indent=2, ensure_ascii=False)
-    except Exception:
-        pass
+            temp_name = f.name
+        # アトミックに置換 (POSIX上では不可分操作)
+        os.replace(temp_name, QUOTA_CACHE_FILE)
+    except Exception as e:
+        write_error_log(f"save_quota_cache_data ERROR: {e}")
+
+
+def update_quota_cache_data(new_data):
+    """APIからフェッチした新規データでキャッシュを更新・アトミック保存します。"""
+    try:
+        cache_data = load_quota_cache_data()
+        
+        cache_data["quota"] = new_data.get("quota", DEFAULT_QUOTAS)
+        cache_data["resets"] = new_data.get("resets", {})
+        cache_data["credits"] = new_data.get("credits", cache_data.get("credits", {}))
+        cache_data["last_fetch_time"] = datetime.datetime.now().isoformat()
+        
+        save_quota_cache_data(cache_data)
+    except Exception as e:
+        write_error_log(f"update_quota_cache_data ERROR: {e}")
 
 
 def get_quota_emoji(percentage):
@@ -850,6 +888,30 @@ def generate_circular_progress_base64(percentage, display_name, reset_text):
     except Exception:
         return None
 
+def determine_quota_type(iso_str):
+    """
+    リセット時間のISO 8601形式文字列から、制限タイプを判定します。
+    - 残り時間が 24時間以内の場合: "5h"
+    - 残り時間が 24時間より長い場合: "W"
+    - 判定できないか None の場合: None
+    """
+    if not iso_str:
+        return None
+    try:
+        if iso_str.endswith('Z'):
+            iso_str = iso_str[:-1] + '+00:00'
+        dt_utc = datetime.datetime.fromisoformat(iso_str)
+        dt_local = dt_utc.astimezone()
+        now = datetime.datetime.now().astimezone()
+        diff = (dt_local - now).total_seconds()
+        
+        if diff <= 86400: # 24時間以内
+            return "5h"
+        else:
+            return "W"
+    except Exception:
+        return None
+
 def format_reset_time(iso_str, lang="en"):
     """UTCのISO 8601形式の文字列を、ローカル（日本時間）の分かりやすい表記に変換します。"""
     if not iso_str:
@@ -890,8 +952,8 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
 
     repr_str = ""
     if quotas:
-        gemini_val = quotas.get("Gemini", 100)
-        claude_val = quotas.get("Claude_GPT", 100)
+        gemini_val = quotas.get("Gemini", quotas.get("F-Med", 100))
+        claude_val = quotas.get("Claude_GPT", quotas.get("Sonnet", 100))
         
         def make_bar(val):
             filled = max(0, min(10, round(val / 10)))
@@ -912,7 +974,19 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
         gemini_bar = make_bar(gemini_val)
         claude_bar = make_bar(claude_val)
         
-        repr_str = f"Gemini {gemini_bar} {gemini_val}%  ❘  Claude & GPT {claude_bar} {claude_val}%"
+        gemini_type = None
+        if gemini_val < 100 and resets_data:
+            r_val = resets_data.get("Gemini", resets_data.get("F-Med"))
+            gemini_type = determine_quota_type(r_val)
+        gemini_suffix = f"({gemini_type})" if gemini_type else ""
+        
+        claude_type = None
+        if claude_val < 100 and resets_data:
+            r_val = resets_data.get("Claude_GPT", resets_data.get("Sonnet"))
+            claude_type = determine_quota_type(r_val)
+        claude_suffix = f"({claude_type})" if claude_type else ""
+        
+        repr_str = f"Gemini {gemini_bar} {gemini_val}%{gemini_suffix}  ❘  Claude & GPT {claude_bar} {claude_val}%{claude_suffix}"
             
     if not repr_str:
         if status["quota_exhausted"]:
@@ -973,11 +1047,17 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
         cache_status = msg["cached"] if is_cached else msg["realtime"]
         lines.append(f"⚡️ Model Quotas {cache_status} | font=\"Helvetica-Bold\" size=12 color=#ffffff")
         
-        # グループ定義: (キャッシュキー, 表示名, リセット情報のキー)
-        groups = [
-            ("Gemini", "Gemini Models", "Gemini"),
-            ("Claude_GPT", "Claude & GPT Models", "Claude_GPT")
-        ]
+        # 代表値グループ定義 (旧形式に戻す)
+        groups = []
+        if "Gemini" in quotas:
+            groups.append(("Gemini", "Gemini Models", "Gemini"))
+        elif "F-Med" in quotas:
+            groups.append(("F-Med", "Gemini Models", "F-Med"))
+            
+        if "Claude_GPT" in quotas:
+            groups.append(("Claude_GPT", "Claude & GPT Models", "Claude_GPT"))
+        elif "Sonnet" in quotas:
+            groups.append(("Sonnet", "Claude & GPT Models", "Sonnet"))
         
         for key, display_name, reset_key in groups:
             if key in quotas:
@@ -986,9 +1066,11 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
                 
                 # 100%の場合はリセット日時を "-"、それ未満は MM/DD HH:MM
                 reset_text = "—"
+                quota_type = None
                 if val < 100 and resets_data and reset_key in resets_data:
                     iso_str = resets_data[reset_key]
                     if iso_str:
+                        quota_type = determine_quota_type(iso_str)
                         try:
                             if iso_str.endswith('Z'):
                                 iso_str = iso_str[:-1] + '+00:00'
@@ -998,8 +1080,15 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
                         except Exception:
                             pass
                 
+                display_name_with_type = display_name
+                # 制限タイプを suffix に追加
+                if quota_type == "5h":
+                    display_name_with_type = f"{display_name} [5h]"
+                elif quota_type == "W":
+                    display_name_with_type = f"{display_name} [Weekly]"
+                
                 # 円形プログレスリング画像の生成（テキスト合成版）
-                base64_img = generate_circular_progress_base64(val, display_name, reset_text)
+                base64_img = generate_circular_progress_base64(val, display_name_with_type, reset_text)
                 
                 if base64_img:
                     # 画像内にテキストが合成されているため、SwiftBarには画像のみを出力する
@@ -1008,7 +1097,7 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
                     # Pillowがない場合のテキストフォールバック (2行に分割)
                     filled = max(0, min(10, round(val / 10)))
                     bar = "█" * filled + "░" * (10 - filled)
-                    lines.append(f"{display_name}  {bar}  {val}% | font=\"Menlo-Bold\" size=14 color={color}")
+                    lines.append(f"{display_name_with_type}  {bar}  {val}% | font=\"Menlo-Bold\" size=14 color={color}")
                     lines.append(f"{INDENT}{INDENT}(Reset: {reset_text}) | font=\"Menlo-Bold\" size=12 color={color}")
         
     if credits_data:
@@ -1070,15 +1159,7 @@ def do_bg_fetch():
             for port in srv["ports"]:
                 data = fetch_quota_from_api(port, srv["csrf_token"])
                 if data:
-                    cache_data = load_quota_cache_data()
-                    lang = cache_data.get("language", "en")
-                    save_quota_cache_data({
-                        "last_fetch_time": datetime.datetime.now().isoformat(),
-                        "quota": data.get("quota"),
-                        "resets": data.get("resets"),
-                        "credits": data.get("credits"),
-                        "language": lang
-                    })
+                    update_quota_cache_data(data)
                     success = True
                     break
             if success:
