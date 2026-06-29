@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
 #<swiftbar.title>Antigravity Quota Monitor</swiftbar.title>
-#<swiftbar.version>2.6.1</swiftbar.version>
+#<swiftbar.version>2.7.0</swiftbar.version>
 #<swiftbar.author>Madoka</swiftbar.author>
 #<swiftbar.desc>Antigravity Quota & Credit Monitor (10-second refresh)</swiftbar.desc>
 #<swiftbar.icon>👾</swiftbar.icon>
@@ -35,8 +35,16 @@ import time
 DAEMON_DIR = os.path.expanduser("~/.gemini/antigravity/daemon")
 try:
     os.makedirs(DAEMON_DIR, exist_ok=True)
-    sys.stderr = open(os.path.join(DAEMON_DIR, "agq_crash.log"), "w")
-except:
+    _stderr_file = open(os.path.join(DAEMON_DIR, "agq_crash.log"), "a")
+    # ログファイルが肥大化しないよう、1MB超過時は切り詰める
+    try:
+        if os.path.getsize(os.path.join(DAEMON_DIR, "agq_crash.log")) > 1_000_000:
+            _stderr_file.close()
+            _stderr_file = open(os.path.join(DAEMON_DIR, "agq_crash.log"), "w")
+    except OSError:
+        pass
+    sys.stderr = _stderr_file
+except Exception:
     pass
 # ------------------------------------
 import threading
@@ -63,7 +71,7 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 # 設定情報
-DAEMON_DIR = os.path.expanduser("~/.gemini/antigravity/daemon")
+# DAEMON_DIR は L35 で定義済み (重複定義を解消)
 LOG_PATTERN = os.path.join(DAEMON_DIR, "ls_*.log")
 ACTIVE_LOG_FILE = os.path.expanduser("~/Library/Logs/Antigravity/language_server.log")
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -73,7 +81,7 @@ QUOTA_CACHE_FILE = os.path.expanduser("~/.gemini/antigravity/daemon/quota_cache.
 # メニューバーのアニメーション用フレーム (10秒周期更新なので、インデックスの切り替え用)
 SPINNER_FRAMES = ["✨️🤔", "💫🤔", "⭐🤔", "🌟😃"]
 MOON_FRAMES = ["💬😑", "💬😐", "💬😊", "💬😃"]
-VERSION = "2.6.0"
+VERSION = "2.7.0"
 INDENT = "\u00A0\u00A0"  # SwiftBarでトリムされないクリーンなインデント (Non-Breaking Space)
 
 # バージョンの動的取得 (package.jsonから自動連動)
@@ -326,8 +334,11 @@ def get_stateless_log_status(log_path=None):
                                 f.seek(max(0, size - 50000))
                                 data = f.read().decode('utf-8', errors='ignore')
                                 
+                                # split結果を再利用（二重実行防止）
+                                data_lines = data.split('\n')
+                                
                                 active_tasks = set()
-                                for line in data.split('\n')[1:]:
+                                for line in data_lines[1:]:
                                     if not line.strip(): continue
                                     try:
                                         obj = json.loads(line)
@@ -341,7 +352,7 @@ def get_stateless_log_status(log_path=None):
                                                 m = re.search(r'Task id \"([\w\-]+(?:/task-\d+)?)\" (?:finished|was canceled) with result', content)
                                                 if m and m.group(1) in active_tasks:
                                                     active_tasks.remove(m.group(1))
-                                    except: pass
+                                    except Exception: pass
                                 
                                 if len(active_tasks) > 0:
                                     has_active_tasks = True
@@ -349,7 +360,7 @@ def get_stateless_log_status(log_path=None):
                                 # 2. 最新ログの状態とmtimeによる「Working」の動的検知
                                 # 会話ログが直近 120 秒以内に更新されている場合
                                 if time.time() - mtime <= 120:
-                                    lines = [l for l in data.split('\n') if l.strip()]
+                                    lines = [l for l in data_lines if l.strip()]
                                     if lines:
                                         last_line = lines[-1]
                                         try:
@@ -521,7 +532,7 @@ def find_lsp_info(force=False):
     try:
         ps_result = subprocess.run(
             "/bin/ps -eo pid,command | grep -i language_server | grep -v grep",
-            shell=True, capture_output=True, text=True
+            shell=True, capture_output=True, text=True, timeout=5
         )
         if ps_result.returncode != 0 or not ps_result.stdout.strip():
             return []
@@ -557,7 +568,10 @@ def find_lsp_info(force=False):
                 
                 if ports:
                     servers.append({"pid": pid, "csrf_token": csrf_token, "ports": ports})
-                    
+        
+        # キャッシュを関数内で更新（設計意図の修正）
+        if servers:
+            _lsp_info_cache = servers
         return servers
     except Exception as e:
         write_error_log(f"find_lsp_info ERROR: {e}")
@@ -602,14 +616,14 @@ def fetch_quota_from_api(port, csrf_token):
         with opener.open(req, timeout=3.0) as response:
             res_body = response.read().decode('utf-8')
             
-            # --- DEBUG DUMP ---
-            try:
-                import os
-                dump_path = os.path.expanduser("~/.gemini/antigravity/daemon/api_dump.json")
-                with open(dump_path, "w") as f:
-                    f.write(res_body)
-            except:
-                pass
+            # --- DEBUG DUMP (環境変数 AGQ_DEBUG=1 の場合のみ有効) ---
+            if os.environ.get("AGQ_DEBUG") == "1":
+                try:
+                    dump_path = os.path.expanduser("~/.gemini/antigravity/daemon/api_dump.json")
+                    with open(dump_path, "w") as f:
+                        f.write(res_body)
+                except Exception:
+                    pass
             # ------------------
 
             if response.status == 200:
@@ -801,6 +815,7 @@ def get_quota_color(percentage):
 
 
 _FONT_CACHE = {}
+_IMAGE_CACHE = {}  # 画像生成キャッシュ: (percentage, display_name, reset_text) -> base64_str
 
 def get_cached_font(font_path, size, index=0):
     """フォントオブジェクトをキャッシュから取得します (ファイルI/O削減)。"""
@@ -825,6 +840,12 @@ def generate_circular_progress_base64(percentage, display_name, reset_text):
     """円形プログレスリングと右側のテキスト（モデル名・回復時間）を2倍サイズ(DPI 144)で合成してRetina対応で返します。"""
     if not HAS_PILLOW:
         return None
+    
+    # 画像キャッシュ: 値が変わらなければ再生成を回避しCPUスパイクを防ぐ
+    cache_key = (percentage, display_name, reset_text)
+    if cache_key in _IMAGE_CACHE:
+        return _IMAGE_CACHE[cache_key]
+    
     try:
         # 横長(720x128)の画像を作成（2xサイズ、透過背景）
         width = 720
@@ -884,6 +905,10 @@ def generate_circular_progress_base64(percentage, display_name, reset_text):
         buffer = io.BytesIO()
         image.save(buffer, format="PNG", dpi=(144, 144))
         img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        # キャッシュに保存（最大10エントリに制限してメモリ肥大化を防止）
+        if len(_IMAGE_CACHE) > 10:
+            _IMAGE_CACHE.clear()
+        _IMAGE_CACHE[cache_key] = img_str
         return img_str
     except Exception:
         return None
@@ -1133,20 +1158,25 @@ def build_swiftbar_output(status, quotas, is_cached, credits_data, resets_data, 
 
 def do_bg_fetch():
     lock_file = os.path.expanduser("~/.gemini/antigravity/daemon/fetch.lock")
-    if os.path.exists(lock_file):
-        try:
-            mtime = os.path.getmtime(lock_file)
-            if time.time() - mtime < 30:  # 30秒以内のロックがあればスキップ
-                return
-        except:
-            pass
-
-    # ロック取得
+    # アトミックなロック取得 (TOCTOU競合を防止)
     try:
         os.makedirs(os.path.dirname(lock_file), exist_ok=True)
-        with open(lock_file, "w") as f:
-            f.write(str(os.getpid()))
-    except:
+        fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+    except FileExistsError:
+        # ロックファイルが既に存在する場合、30秒以上古ければ強制削除して再取得
+        try:
+            mtime = os.path.getmtime(lock_file)
+            if time.time() - mtime < 30:
+                return
+            os.remove(lock_file)
+            fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+        except Exception:
+            return
+    except Exception:
         pass
 
     try:

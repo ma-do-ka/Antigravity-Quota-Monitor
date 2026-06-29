@@ -14,11 +14,11 @@
 
 **Antigravity Quota Monitor (AQM)** is a premium macOS menu bar utility (SwiftBar / xbar plugin) designed to monitor real-time API quotas, reset times, and monthly credits for your LLMs under the Antigravity agent system.
 
-Starting with **v2.6.1**, AQM has been completely redesigned with an ultra-sleek **10-Dot System Bar Gauge** and **Dynamic In-Menu Progress Rings** to offer a premium, space-saving desktop dashboard experience.
+Starting with **v2.7.0**, AQM has been completely redesigned with an ultra-sleek **10-Dot System Bar Gauge** and **Dynamic In-Menu Progress Rings** to offer a premium, space-saving desktop dashboard experience.
 
 ---
 
-## ✨ Features (v2.6.1)
+## ✨ Features (v2.7.0)
 
 *   **🟢 10-Dot System Bar Gauge (New)**: Replaced verbose textual status items on your menu bar with a beautiful, space-efficient horizontal 10-dot gauge (`🔴🟢🔵🟣🟡🟠`). You can grasp your exact quota level (in 10% steps) at a single glance.
 *   **🍩 Dynamic In-Menu Progress Rings (New)**: Detailed dropdown now generates high-definition circular progress rings dynamically on-the-fly using `Pillow`. 
@@ -107,6 +107,15 @@ The leftmost icon in the menu bar dynamically reflects your AI agent's real-time
 
 ## 📋 Changelog
 
+### v2.7.0
+- 🔴 **Comprehensive Resource & Stability Optimization**:
+  - **Process Timeout**: Added a 5-second timeout to the `ps` subprocess check inside `find_lsp_info` to completely prevent process accumulation or daemon freezing if system queries hang.
+  - **Atomic File Lock**: Refactored the background fetch execution lock using standard POSIX `O_CREAT | O_EXCL` flags, resolving a potential TOCTOU race condition when launching concurrent processes.
+  - **Memory & File Descriptor Leak Prevention**: Upgraded stderr redirection to append mode (`"a"`) with a 1MB file size limit to prevent memory/FD exhaustion during long-term desktop execution.
+  - **Memory Image Caching**: Introduced a dynamic Pillow circular progress base64 image cache (`_IMAGE_CACHE`, max 10 entries) to eliminate redundant PNG generation/base64 encoding and completely eliminate 10s idle CPU spikes.
+  - **I/O & Memory Reductions**: Disabled active stdout/stderr file dumps by default (now requires `AGQ_DEBUG=1` environment variable). Resolved double `split('\n')` calls in log scanning to lower memory consumption.
+  - **Code Cleanup**: Removed duplicate definitions of the daemon directories and aligned cache updates natively inside the lookup scope.
+
 ### v2.6.1
 - ⚙️ **Rollback Quota Estimation (Correctness Focus)**: Completely rolled back the local caching algorithm that separately estimated 5h and Weekly quotas. Now directly displays raw API values for Gemini and Claude/GPT models with their actual reset type suffix (`[5h]` or `[Weekly]`). Added safety cache-clearing logic to automatically reset invalid v2.6.0 keys to fallback defaults.
 
@@ -166,11 +175,11 @@ The leftmost icon in the menu bar dynamically reflects your AI agent's real-time
 
 **Antigravity Quota Monitor (AQM)** は、macOS のメニューバー（システムバー）および VS Code に、Antigravity（Gemini）エージェント環境下の利用クォータ残量、リセット時間、およびクレジット制限枠を**美しく可視化するプレミアムユーティリティ**です。
 
-最新バージョンである **v2.6.1** では、デスクトップ領域を邪魔しない**10ドット・システムバーゲージ**と、詳細メニュー内の**動的プログレスリング画像表示**を新たに搭載し、圧倒的にスマートなUIへ進化しました。
+最新バージョンである **v2.7.0** では、デスクトップ領域を邪魔しない**10ドット・システムバーゲージ**と、詳細メニュー内の**動的プログレスリング画像表示**を新たに搭載し、圧倒的にスマートなUIへ進化しました。
 
 ---
 
-## ✨ v2.6.1 の新機能と特長
+## ✨ v2.7.0 の新機能と特長
 
 *   **🟢 10ドット・システムバーゲージ (New)**: メニューバー上の長ったらしい文字列表示を廃止し、省スペースで直感的な10個のカラードット（`🔴🟢🔵🟣🟡🟠`）によるゲージ表示に変更。残りクォータを10%刻みで直感的に把握できます。
 *   **🍩 動的プログレスリング画像表示 (New)**: 詳細ドロップダウン内に、`Pillow` ライブラリを用いてその場で高解像度な円形進捗リング画像を動的に生成して表示します。
@@ -258,6 +267,16 @@ graph TD
 ---
 
 ## 📋 更新履歴 (Changelog)
+
+### v2.7.0
+- 🔴 **包括的なリソース＆安定性最適化 (8件の重大改修)**:
+  - **サブプロセスのタイムアウト設定**: `find_lsp_info` 内のプロセス取得コマンドに `timeout=5` 秒を設定し、LSPの死活監視ハングアップ時のプロセス無限蓄積リスクを完全排除。
+  - **アトミックロックの導入**: バックグラウンドフェッチ用排他制御ファイル（ロック）の取得に POSIX 標準の `O_CREAT | O_EXCL` フラグを採用し、TOCTOU レースコンディション（二重起動）を完全防止。
+  - **ファイルディスクリプタリークおよびログ肥大化防止**: stderr ログ書き込みハンドルを追記（`"a"`）モードに改修して永続保持し、1MB超過時の自動切り詰め（ローテーション）を実装して FD リークを解消。
+  - **描画CPU負荷の削減（画像メモリキャッシュ）**: 10秒ごとの Pillow による Progress Ring の画像生成・base64エンコード処理について、値が変化しない限りキャッシュから読み出す `_IMAGE_CACHE`（最大10エントリ）を導入し、CPU スパイクを排除。
+  - **無駄なディスク I/O の排除**: API レスポンスの毎回ダンプ処理を `AGQ_DEBUG=1` 環境変数がある場合のみ動作するようガード。
+  - **不要なメモリ確保の最適化**: ログパース処理内の `data.split('\n')` の二重実行を解消し、一度の解析結果を再利用するよう最適化。
+  - **コードクリーンアップ**: `DAEMON_DIR` の重複定義を解消し、`find_lsp_info` 内でキャッシュをアトミックに更新するよう修正。
 
 ### v2.6.1
 - ⚙️ **クォータ推測表示の廃止（正確性徹底への差し戻し）**: 前回のリリースで導入された、キャッシュ上で5時間制限と週制限を個別に推測・仕分ける疑似マルチ表示を完全にロールバックしました。APIから提供される生データ（最も厳しい現在のクォータ）をそのまま誠実に表示し、判定された正確な制限タイプ `[5h]` または `[Weekly]` のみを付与する元の正しい仕様に戻しました。また、2.6.0の個別キャッシュキー（`Gemini_5h`等）が残存している場合は自動検知して安全にデフォルト状態へ初期化するクリーンアップ処理を導入しました。
